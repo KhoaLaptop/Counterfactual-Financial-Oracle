@@ -1,0 +1,11 @@
+streamlit
+openai
+numpy
+pandas
+pydantic
+python-dotenv
+requests
+fpdf
+pytest
+google-generativeai
+

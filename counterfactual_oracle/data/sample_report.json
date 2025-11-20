@@ -1,0 +1,59 @@
+{
+  "income_statement": {
+    "Revenue": 1000000,
+    "CostOfGoodsSold": 600000,
+    "GrossProfit": 400000,
+    "OpEx": 200000,
+    "EBITDA": 200000,
+    "DepreciationAndAmortization": 50000,
+    "EBIT": 150000,
+    "InterestExpense": 20000,
+    "Taxes": 32500,
+    "NetIncome": 97500
+  },
+  "balance_sheet": {
+    "Assets": {
+      "Cash": 50000,
+      "AccountsReceivable": 100000,
+      "Inventory": 75000,
+      "PropertyPlantEquipment": 300000,
+      "TotalAssets": 525000
+    },
+    "Liabilities": {
+      "AccountsPayable": 60000,
+      "ShortTermDebt": 20000,
+      "LongTermDebt": 150000,
+      "TotalLiabilities": 230000
+    },
+    "Equity": {
+      "RetainedEarnings": 195000,
+      "CommonStock": 100000,
+      "TotalEquity": 295000
+    }
+  },
+  "cash_flow": {
+    "NetIncome": 97500,
+    "Depreciation": 50000,
+    "ChangeInWorkingCapital": -10000,
+    "CashFromOperations": 137500,
+    "CapEx": -40000,
+    "CashFromInvesting": -40000,
+    "DebtRepayment": -10000,
+    "Dividends": 0,
+    "CashFromFinancing": -10000,
+    "NetChangeInCash": 87500
+  },
+  "kpis": {
+    "RevenueGrowth": 0.10,
+    "EBITDAMargin": 0.20,
+    "TaxRate": 0.25
+  },
+  "notes": {
+    "OpEx": "Operating expenses include SG&A and R&D.",
+    "Debt": "Long-term debt interest rate is approx 5%."
+  },
+  "index": {
+    "Revenue": "Page 4, Table 1",
+    "OpEx": "Page 4, Table 1"
+  }
+}
