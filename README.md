@@ -226,7 +226,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Contact
 
-**Khoa Pham**
+**Khoa Dang**
 - GitHub: [@KhoaLaptop](https://github.com/KhoaLaptop)
 - Project Link: [https://github.com/KhoaLaptop/Counterfactual-Financial-Oracle-67](https://github.com/KhoaLaptop/Counterfactual-Financial-Oracle-67)
 
