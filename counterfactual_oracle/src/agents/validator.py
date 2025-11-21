@@ -1,4 +1,5 @@
 import google.generativeai as genai
+import time
 import json
 from typing import Dict, Any, List, Optional
 from ..models import FinancialReport, AggregatedSimulation
@@ -68,7 +69,11 @@ class RealismValidatorAgent:
         }}
         """
         
+
+        
         try:
+            # RATE LIMITING: Pause before validation call
+            time.sleep(10)
             response = self.model.generate_content(prompt)
             text = response.text
             if '```json' in text:

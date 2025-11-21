@@ -7,8 +7,8 @@ the final consensus from the debate transcript.
 
 import time
 import re
+import json
 from typing import List, Tuple
-import google.generativeai as genai
 from openai import OpenAI
 
 from ..models import FinancialReport, AggregatedSimulation, DebateTurn, DebateResult
@@ -25,11 +25,13 @@ from ..debate_prompts import (
 from .validator import RealismValidatorAgent
 
 class DebateAgent:
-    def __init__(self, gemini_api_key: str, deepseek_api_key: str):
+    def __init__(self, kimi_api_key: str, deepseek_api_key: str):
         """Initialize debate agent with API clients"""
-        # Gemini (Optimist) - using gemini-2.0-flash-exp (latest available model)
-        genai.configure(api_key=gemini_api_key)
-        self.gemini = genai.GenerativeModel('gemini-2.0-flash-exp')
+        # Kimi (Optimist) - using moonshot-v1-8k
+        self.kimi = OpenAI(
+            api_key=kimi_api_key,
+            base_url="https://api.moonshot.cn/v1"
+        )
         
         # DeepSeek (Skeptic)  
         self.deepseek = OpenAI(
@@ -37,8 +39,8 @@ class DebateAgent:
             base_url="https://api.deepseek.com/v1"
         )
         
-        # Realism Validator
-        self.validator = RealismValidatorAgent(api_key=gemini_api_key)
+        # Realism Validator (using Kimi now)
+        self.validator = RealismValidatorAgent(api_key=kimi_api_key)
         
     def run_debate(
         self, 
@@ -66,19 +68,19 @@ class DebateAgent:
         converged = False
         convergence_round = None
         
-        # Round 1: Gemini opens with optimistic position (Validated)
-        gemini_opening = self._get_validated_gemini_position(report, simulation, params, debate_log)
+        # Round 1: Optimist (Kimi) opens with optimistic position (Validated)
+        optimist_opening = self._get_validated_optimist_position(report, simulation, params, debate_log)
         debate_log.append(DebateTurn(
             round_number=1,
-            speaker="Gemini",
+            speaker="Kimi",
             role="Optimist",
-            message=gemini_opening,
+            message=optimist_opening,
             timestamp=time.time(),
             topic_focus="Opening Position"
         ))
         
         # Round 1: DeepSeek challenges
-        deepseek_challenge = self._get_deepseek_challenge(gemini_opening, report, simulation, params, debate_log)
+        deepseek_challenge = self._get_deepseek_challenge(optimist_opening, report, simulation, params, debate_log)
         debate_log.append(DebateTurn(
             round_number=1,
             speaker="DeepSeek",
@@ -90,8 +92,12 @@ class DebateAgent:
         
         # Continue debate until convergence or max rounds
         for round_num in range(2, max_rounds + 1):
-            # Gemini responds to critique (Validated)
-            gemini_response = self._get_validated_gemini_response(
+            # RATE LIMITING: Pause before next LLM call (Kimi response)
+            # Kimi Tier 0 limit is 3 RPM -> 20s per request. We use 25s to be safe.
+            # The sleep is handled inside _get_validated_optimist_response
+
+            # Optimist (Kimi) responds to critique (Validated)
+            optimist_response = self._get_validated_optimist_response(
                 deepseek_challenge, 
                 round_num, 
                 debate_log,
@@ -101,9 +107,9 @@ class DebateAgent:
             )
             debate_log.append(DebateTurn(
                 round_number=round_num,
-                speaker="Gemini",
+                speaker="Kimi",
                 role="Optimist",
-                message=gemini_response,
+                message=optimist_response,
                 timestamp=time.time(),
                 topic_focus=f"Round {round_num} Response"
             ))
@@ -118,11 +124,17 @@ class DebateAgent:
             else:
                 convergence_counter = 0  # Reset if new objections arise
             
-            # DeepSeek counters
+            # RATE LIMITING: Pause before next LLM call (DeepSeek counter)
+            time.sleep(10)
+
+            # DeepSeek counters - PASS data to prevent amnesia
             deepseek_counter = self._get_deepseek_counter(
-                gemini_response,
+                optimist_response,
                 round_num,
-                debate_log
+                debate_log,
+                report,
+                simulation,
+                params
             )
             debate_log.append(DebateTurn(
                 round_number=round_num,
@@ -151,32 +163,44 @@ class DebateAgent:
             confidence_level=consensus['confidence']
         )
     
-    def _get_validated_gemini_position(
+    def _get_validated_optimist_position(
         self, 
         report: FinancialReport, 
         simulation: AggregatedSimulation,
         params: 'ScenarioParams',
         debate_log: List[DebateTurn]
     ) -> str:
-        """Get Gemini's opening position with validation retry loop"""
+        """Get Optimist's (Kimi) opening position with validation retry loop"""
         prompt = get_gemini_opening_prompt(report, simulation, params)
         
         for attempt in range(3):
-            response = self.gemini.generate_content(prompt)
-            text = response.text
+            # RATE LIMITING: Strict 25s pause for Kimi Tier 0 (3 RPM)
+            time.sleep(25)
             
-            # Validate
-            validation = self.validator.validate_statement(text, report, simulation)
-            
-            if validation['is_valid']:
-                return text
-            else:
-                # Add feedback to prompt and retry
-                prompt += f"\n\n[SYSTEM FEEDBACK]: Your previous response was rejected. Issues: {validation['issues']}. \nFeedback: {validation['feedback']}\n\nPlease rewrite strictly adhering to the data."
+            try:
+                response = self.kimi.chat.completions.create(
+                    model="moonshot-v1-8k",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.7
+                )
+                text = response.choices[0].message.content
+                
+                # Validate
+                validation = self.validator.validate_statement(text, report, simulation)
+                
+                if validation['is_valid']:
+                    return text
+                else:
+                    # Add feedback to prompt and retry
+                    prompt += f"\n\n[SYSTEM FEEDBACK]: Your previous response was rejected. Issues: {validation['issues']}. \nFeedback: {validation['feedback']}\n\nPlease rewrite strictly adhering to the data."
+            except Exception as e:
+                print(f"Kimi API Error: {e}")
+                if attempt == 2: raise e
+                time.sleep(5) # Short backoff on error
         
         return text # Return last attempt if all fail
 
-    def _get_validated_gemini_response(
+    def _get_validated_optimist_response(
         self,
         deepseek_challenge: str,
         round_num: int,
@@ -185,28 +209,41 @@ class DebateAgent:
         simulation: AggregatedSimulation,
         params: 'ScenarioParams'
     ) -> str:
-        """Get Gemini's response with validation retry loop"""
-        # Summarize previous Gemini statements
-        gemini_summary = " ".join([
+        """Get Optimist's (Kimi) response with validation retry loop"""
+        # Summarize previous Optimist statements
+        optimist_summary = " ".join([
             t.message[:100] for t in debate_log 
-            if t.speaker == "Gemini"
+            if t.speaker == "Kimi"
         ])
         
-        context = {'gemini_summary': gemini_summary}
-        prompt = get_gemini_response_prompt(deepseek_challenge, round_num, context)
+        context = {'gemini_summary': optimist_summary}
+        # PASS report, simulation, params to re-inject data
+        prompt = get_gemini_response_prompt(deepseek_challenge, round_num, context, report, simulation, params)
         
         for attempt in range(3):
-            response = self.gemini.generate_content(prompt)
-            text = response.text
+            # RATE LIMITING: Strict 25s pause for Kimi Tier 0 (3 RPM)
+            time.sleep(25)
             
-            # Validate
-            validation = self.validator.validate_statement(text, report, simulation)
-            
-            if validation['is_valid']:
-                return text
-            else:
-                # Add feedback to prompt and retry
-                prompt += f"\n\n[SYSTEM FEEDBACK]: Your previous response was rejected. Issues: {validation['issues']}. \nFeedback: {validation['feedback']}\n\nPlease rewrite strictly adhering to the data."
+            try:
+                response = self.kimi.chat.completions.create(
+                    model="moonshot-v1-8k",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.7
+                )
+                text = response.choices[0].message.content
+                
+                # Validate
+                validation = self.validator.validate_statement(text, report, simulation)
+                
+                if validation['is_valid']:
+                    return text
+                else:
+                    # Add feedback to prompt and retry
+                    prompt += f"\n\n[SYSTEM FEEDBACK]: Your previous response was rejected. Issues: {validation['issues']}. \nFeedback: {validation['feedback']}\n\nPlease rewrite strictly adhering to the data."
+            except Exception as e:
+                print(f"Kimi API Error: {e}")
+                if attempt == 2: raise e
+                time.sleep(5)
                 
         return text
     
@@ -231,7 +268,10 @@ class DebateAgent:
         self,
         gemini_response: str,
         round_num: int,
-        debate_log: List[DebateTurn]
+        debate_log: List[DebateTurn],
+        report: FinancialReport,
+        simulation: AggregatedSimulation,
+        params: 'ScenarioParams'
     ) -> str:
         """Get DeepSeek's counter-argument"""
         # Summarize previous DeepSeek statements
@@ -241,7 +281,8 @@ class DebateAgent:
         ])
         
         context = {'deepseek_summary': deepseek_summary}
-        prompt = get_deepseek_counter_prompt(gemini_response, round_num, context)
+        # PASS report, simulation, params to re-inject data
+        prompt = get_deepseek_counter_prompt(gemini_response, round_num, context, report, simulation, params)
         
         response = self.deepseek.chat.completions.create(
             model="deepseek-chat",
@@ -286,128 +327,57 @@ class DebateAgent:
         debate_log: List[DebateTurn],
         converged: bool
     ) -> dict:
-        """Synthesize final consensus from debate"""
-        # Get final statements from both
-        final_gemini = [t for t in debate_log if t.speaker == "Gemini"][-1].message
-        final_deepseek = [t for t in debate_log if t.speaker == "DeepSeek"][-1].message
+        """Synthesize final consensus from debate using LLM"""
         
-        # Extract agreements and disagreements
-        agreements = self._extract_agreements(debate_log)
-        disagreements = self._extract_disagreements(debate_log)
+        # Construct debate history string
+        debate_history = "\n\n".join([
+            f"ROUND {t.round_number} - {t.speaker} ({t.role}):\n{t.message}"
+            for t in debate_log
+        ])
         
-        # Determine verdict
-        verdict = self._determine_verdict(debate_log, converged)
+        prompt = get_consensus_prompt(debate_history, final_round=True)
         
-        # Determine confidence
-        confidence = "High" if converged and len(disagreements) == 0 else \
-                    "Medium" if converged else "Low"
-        
-        # Create summary
-        summary = f"""After {len(set(t.round_number for t in debate_log))} rounds of debate, 
-the analysts {'reached consensus' if converged else 'discussed but did not fully converge'}.
+        try:
+            # RATE LIMITING: Strict 25s pause for Kimi
+            time.sleep(25)
+            
+            # Call Kimi to synthesize consensus
+            response = self.kimi.chat.completions.create(
+                model="moonshot-v1-8k",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.5
+            )
+            text = response.choices[0].message.content
+            
+            # Clean up markdown code blocks if present
+            if '```json' in text:
+                text = text.split('```json')[1].split('```')[0].strip()
+            elif '```' in text:
+                text = text.split('```')[1].split('```')[0].strip()
+                
+            data = json.loads(text)
+            
+            return {
+                'summary': data.get('summary', "Consensus reached."),
+                'agreements': data.get('agreements', []),
+                'disagreements': data.get('disagreements', []),
+                'verdict': data.get('verdict', "Hold"),
+                'confidence': data.get('confidence', "Medium")
+            }
+            
+        except Exception as e:
+            print(f"Error synthesizing consensus: {e}")
+            # Fallback to simple summary if LLM fails
+            return {
+                'summary': "The analysts discussed the scenario but could not generate a structured consensus summary due to a processing error.",
+                'agreements': ["Debate completed"],
+                'disagreements': ["See transcript for details"],
+                'verdict': "Hold",
+                'confidence': "Low"
+            }
 
-Key Points of Agreement:
-{chr(10).join('- ' + a for a in agreements[:3])}
-
-{'Remaining Concerns:' if disagreements else ''}
-{chr(10).join('- ' + d for d in disagreements[:2]) if disagreements else ''}
-
-Final Assessment: {verdict}
-"""
-        
-        return {
-            'summary': summary,
-            'agreements': agreements,
-            'disagreements': disagreements,
-            'verdict': verdict,
-            'confidence': confidence
-        }
-    
-    def _extract_agreements(self, debate_log: List[DebateTurn]) -> List[str]:
-        """Extract points of agreement from debate"""
-        agreements = []
-        
-        for turn in debate_log:
-            msg = turn.message
-            msg_lower = msg.lower()
-            
-            # Find agreement keywords
-            agreement_keywords = ["i agree", "you're right", "fair point", "i concede", "that makes sense"]
-            
-            for keyword in agreement_keywords:
-                if keyword in msg_lower:
-                    # Find the position of the keyword
-                    keyword_pos = msg_lower.find(keyword)
-                    
-                    # Find the start of the sentence (look backwards for period or start of string)
-                    start = msg.rfind('.', 0, keyword_pos) + 1
-                    if start == 0:  # No period found, start from beginning
-                        start = 0
-                    
-                    # Find the end of the sentence (look forwards for period)
-                    end = msg.find('.', keyword_pos)
-                    if end == -1:  # No period found, go to end
-                        end = len(msg)
-                    else:
-                        end += 1  # Include the period
-                    
-                    # Extract the full sentence
-                    sentence = msg[start:end].strip()
-                    
-                    # Only add if it's meaningful (more than 20 chars)
-                    if len(sentence) > 20:
-                        agreements.append(sentence)
-                        break  # Only one agreement per turn
-        
-        # Return unique agreements
-        unique_agreements = list(dict.fromkeys(agreements))  # Preserve order
-        return unique_agreements[:5]
-    
-    def _extract_disagreements(self, debate_log: List[DebateTurn]) -> List[str]:
-        """Extract remaining points of disagreement"""
-        disagreements = []
-        
-        # Look at last 2 rounds
-        recent_turns = [t for t in debate_log if t.round_number >= debate_log[-1].round_number - 1]
-        
-        for turn in recent_turns:
-            msg = turn.message
-            msg_lower = msg.lower()
-            
-            # Find disagreement keywords
-            disagreement_keywords = ["however", "concern", "risk", "challenge", "but"]
-            
-            for keyword in disagreement_keywords:
-                if keyword in msg_lower:
-                    # Find the position of the keyword
-                    keyword_pos = msg_lower.find(keyword)
-                    
-                    # Find the start of the sentence
-                    start = msg.rfind('.', 0, keyword_pos) + 1
-                    if start == 0:
-                        start = 0
-                    
-                    # Find the end of the sentence
-                    end = msg.find('.', keyword_pos)
-                    if end == -1:
-                        end = len(msg)
-                    else:
-                        end += 1
-                    
-                    # Extract the full sentence
-                    sentence = msg[start:end].strip()
-                    
-                    # Only add if meaningful (more than 25 chars)
-                    if len(sentence) > 25:
-                        disagreements.append(sentence)
-                        break
-        
-        # Return unique disagreements
-        unique_disagreements = list(dict.fromkeys(disagreements))
-        return unique_disagreements[:3]
-    
     def _determine_verdict(self, debate_log: List[DebateTurn], converged: bool) -> str:
-        """Determine final investment verdict from debate"""
+        """Determine final investment verdict from debate (Fallback)"""
         # Get all messages
         all_text = " ".join([t.message.lower() for t in debate_log])
         

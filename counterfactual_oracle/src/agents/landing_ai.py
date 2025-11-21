@@ -22,16 +22,24 @@ class LandingAIClient:
         }
         
         # Upload the PDF and request extraction
+        # Increase timeout to 15 minutes for large financial PDFs
         with open(pdf_path, 'rb') as f:
             files = {'document': f}
             response = requests.post(
                 f"{self.base_url}/parse",
                 headers=headers,
-                files=files
+                files=files,
+                timeout=900  # 15 minutes timeout for large PDFs
             )
         
+        # Only accept 200 OK. 206 (Partial Content) means corrupted data
         if response.status_code != 200:
-            raise Exception(f"Landing AI API error: {response.status_code} - {response.text}")
+            error_msg = f"Landing AI API error: {response.status_code}"
+            if response.status_code == 206:
+                error_msg += " - PDF processing incomplete/corrupted. Try a simpler PDF or fewer pages."
+            else:
+                error_msg += f" - {response.text[:500]}"  # Limit error text
+            raise Exception(error_msg)
         
         raw_data = response.json()
         
@@ -230,8 +238,10 @@ class LandingAIClient:
         # Income Statement (Use is_map)
         revenue = get_value(is_map, ['Net sales', 'Total net sales', 'Revenue', 'Total revenue', 'Sales'])
         cogs = get_value(is_map, ['Cost of sales', 'Total cost of sales', 'Cost of goods sold', 'Cost of revenue'])
-        gross_profit = get_value(is_map, ['Gross margin', 'Gross profit'])
         
+        # FIX 1: Separate Gross Profit (dollar amount) from Gross Margin (percentage)
+        gross_profit = get_value(is_map, ['Gross profit'], default=0.0)
+        # If not found, calculate it
         if gross_profit == 0 and revenue != 0 and cogs != 0:
             gross_profit = revenue - cogs
             
@@ -243,14 +253,20 @@ class LandingAIClient:
             
         net_income = get_value(is_map, ['Net income', 'Net earnings', 'Net profit', 'Net loss'])
         
-        rnd = get_optional_value(is_map, ['Research and development', 'R&D'])
-        sga = get_optional_value(is_map, ['Selling, general and administrative', 'SG&A'])
+        # FIX 2: Improve SG&A extraction with better synonyms
+        rnd = get_optional_value(is_map, ['Research and development', 'R&D', 'Research & development'])
+        sga = get_optional_value(is_map, [
+            'Sales, general and administrative', 
+            'Selling, general and administrative', 
+            'SG&A',
+            'Sales, general & administrative'
+        ])
         
         if opex == 0 and (rnd or sga):
             opex = (rnd or 0) + (sga or 0)
 
         interest = get_value(is_map, ['Interest expense', 'Interest and dividend income'], default=0.0)
-        taxes = get_value(is_map, ['Provision for income taxes', 'Income tax expense'])
+        taxes = get_value(is_map, ['Provision for income taxes', 'Income tax expense', 'Income tax'])
         
         # Try to find Depreciation in CF if not in IS (common)
         da = get_value(is_map, ['Depreciation and amortization'], default=0.0)
@@ -279,11 +295,40 @@ class LandingAIClient:
         # Balance Sheet (Use bs_map)
         total_assets = get_value(bs_map, ['Total assets'])
         total_liabilities = get_value(bs_map, ['Total liabilities'])
-        total_equity = get_value(bs_map, ['Total shareholders\' equity', 'Total equity'])
         
-        cash = get_optional_value(bs_map, ['Cash and cash equivalents', 'Cash and cash equivalents, end of period'])
-        short_term_debt = get_optional_value(bs_map, ['Commercial paper', 'Term debt', 'Current portion of term debt'])
-        long_term_debt = get_optional_value(bs_map, ['Term debt', 'Long-term debt'])
+        # FIX 3: Better equity extraction
+        total_equity = get_value(bs_map, [
+            'Shareholders\' equity',
+            'Total shareholders\' equity', 
+            'Total equity',
+            'Stockholders\' equity'
+        ], default=0.0)
+        # If still 0, calculate from balance sheet equation
+        if total_equity == 0 and total_assets != 0 and total_liabilities != 0:
+            total_equity = total_assets - total_liabilities
+        
+        # FIX 4: Better cash extraction with more synonyms
+        cash = get_optional_value(bs_map, [
+            'Cash, cash equivalents and marketable securities',
+            'Cash and cash equivalents', 
+            'Cash and cash equivalents, end of period',
+            'Cash'
+        ])
+        
+        # FIX 5: Separate short-term and long-term debt properly
+        short_term_debt = get_optional_value(bs_map, [
+            'Short-term debt',
+            'Current portion of long-term debt',
+            'Commercial paper'
+        ])
+        
+        # FIX 6: Better long-term debt extraction
+        long_term_debt = get_optional_value(bs_map, [
+            'Long-term debt', 
+            'Long term debt',
+            'Term debt'
+        ])
+        
         ar = get_optional_value(bs_map, ['Accounts receivable, net', 'Accounts receivable'])
         inventory = get_optional_value(bs_map, ['Inventories', 'Inventory'])
         ap = get_optional_value(bs_map, ['Accounts payable'])
@@ -301,47 +346,75 @@ class LandingAIClient:
         )
         
         # Cash Flow (Use cf_map)
-        cfo = get_value(cf_map, ['Cash generated by operating activities', 'Net cash provided by operating activities', 'Cash from operations'])
-        capex = get_value(cf_map, ['Payments for acquisition of property, plant and equipment', 'Capital expenditures'])
-        capex = abs(capex)
+        cfo = get_value(cf_map, [
+            'Net cash provided by operating activities',
+            'Cash generated by operating activities', 
+            'Cash from operations'
+        ], default=0.0)
         
-        fcf_calc = cfo - capex if cfo != 0 else None
+        # FIX 7: Better CapEx extraction
+        capex = get_value(cf_map, [
+            'Purchases related to property and equipment and intangible assets',
+            'Payments for acquisition of property, plant and equipment',
+            'Capital expenditures',
+            'Purchases of property and equipment'
+        ], default=0.0)
+        capex = abs(capex) if capex != 0 else 0.0
         
-        share_repurchases = get_optional_value(cf_map, ['Repurchases of common stock', 'Payments for dividends and dividend equivalents'])
+        # FIX 8: FCF = CFO - CapEx (not just CFO)
+        fcf_calc = (cfo - capex) if cfo != 0 else 0.0
+        
+        share_repurchases = get_optional_value(cf_map, [
+            'Payments related to repurchases of common stock',
+            'Repurchases of common stock', 
+            'Payments for dividends and dividend equivalents'
+        ])
         if share_repurchases: share_repurchases = abs(share_repurchases)
         
-        dividends = get_optional_value(cf_map, ['Payments for dividends', 'Dividends paid'])
+        dividends = get_optional_value(cf_map, [
+            'Dividends paid',
+            'Payments for dividends'
+        ])
         if dividends: dividends = abs(dividends)
         
-        net_change_cash = get_value(cf_map, ['Increase (decrease) in cash', 'Net increase (decrease) in cash', 'Net change in cash'])
+        # FIX 9: Better net change in cash extraction
+        net_change_cash = get_value(cf_map, [
+            'Change in cash and cash equivalents',
+            'Increase/(Decrease) in cash, cash equivalents and restricted cash',
+            'Increase (decrease) in cash', 
+            'Net increase (decrease) in cash', 
+            'Net change in cash'
+        ], default=0.0)
+        
+        # FIX 10: Calculate working capital changes from individual components
+        ar_change = get_value(cf_map, ['Accounts receivable'], default=0.0)
+        inv_change = get_value(cf_map, ['Inventories'], default=0.0)
+        ap_change = get_value(cf_map, ['Accounts payable'], default=0.0)
+        accrued_change = get_value(cf_map, ['Accrued and other current liabilities'], default=0.0)
+        wc_change = ar_change + inv_change + ap_change + accrued_change
         
         cash_flow = CashFlow(
             NetIncome=net_income,
             Depreciation=da,
-            ChangeInWorkingCapital=0.0,
+            ChangeInWorkingCapital=wc_change,
             CashFromOperations=cfo,
             CapEx=capex,
             CashFromInvesting=get_value(cf_map, [
+                'Net cash used in investing activities',
                 'Cash generated by/(used in) investing activities', 
-                'Net cash used in investing activities', 
                 'Cash from investing',
                 'Investing activities'
-            ]),
+            ], default=0.0),
             DebtRepayment=0.0,
             Dividends=dividends or 0.0,
             CashFromFinancing=get_value(cf_map, [
+                'Net cash used in financing activities',
                 'Cash used in financing activities',
                 'Cash generated by/(used in) financing activities',
-                'Net cash used in financing activities', 
                 'Cash from financing',
                 'Financing activities'
-            ]),
-            NetChangeInCash=get_value(cf_map, [
-                'Increase/(Decrease) in cash, cash equivalents and restricted cash',
-                'Increase (decrease) in cash', 
-                'Net increase (decrease) in cash', 
-                'Net change in cash'
-            ]),
+            ], default=0.0),
+            NetChangeInCash=net_change_cash,
             FreeCashFlow=fcf_calc,
             ShareRepurchases=share_repurchases
         )

@@ -149,6 +149,11 @@ class SimulationResult(BaseModel):
     fcf: float
     npv: float
     key_driver: str
+    # Multi-year forecasts (t1 to t5)
+    revenue_forecast: List[float] = Field(default_factory=list)
+    ebitda_forecast: List[float] = Field(default_factory=list)
+    net_income_forecast: List[float] = Field(default_factory=list)
+    fcf_forecast: List[float] = Field(default_factory=list)
 
 class AggregatedSimulation(BaseModel):
     median_npv: float
@@ -157,6 +162,10 @@ class AggregatedSimulation(BaseModel):
     median_revenue: float
     median_ebitda: float
     median_fcf: float
+    # Aggregated multi-year forecasts (P50)
+    revenue_forecast_p50: List[float] = Field(default_factory=list)
+    ebitda_forecast_p50: List[float] = Field(default_factory=list)
+    fcf_forecast_p50: List[float] = Field(default_factory=list)
     assumption_log: List[str]
     traceability: Dict[str, str]
     simulation_runs: List[SimulationResult]

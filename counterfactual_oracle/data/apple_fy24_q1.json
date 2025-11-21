@@ -1,106 +1,111 @@
 {
     "income_statement": {
-        "Revenue": 119575,
-        "CostOfGoodsSold": 64720,
-        "GrossProfit": 54855,
-        "OpEx": 14482,
-        "EBITDA": 40373,
-        "DepreciationAndAmortization": 2848,
-        "EBIT": 37525,
-        "InterestExpense": 50,
-        "Taxes": 6407,
-        "NetIncome": 33916,
-        "RnD": 7696,
-        "SGA": 6786
+        "Revenue": 57006,
+        "CostOfGoodsSold": 15157,
+        "GrossProfit": 41849,
+        "GrossMargin": 0.734,
+        "OpEx": 5839,
+        "RnD": 4705,
+        "SGA": 1134,
+        "EBITDA": 36762,
+        "DepreciationAndAmortization": 752,
+        "EBIT": 36010,
+        "InterestIncome": 624,
+        "InterestExpense": -61,
+        "OtherIncome": 1363,
+        "PretaxIncome": 37936,
+        "Taxes": 6026,
+        "NetIncome": 31910
     },
     "balance_sheet": {
         "Assets": {
-            "Cash": 40760,
-            "AccountsReceivable": 23194,
-            "Inventory": 6511,
-            "PropertyPlantEquipment": 43666,
-            "TotalAssets": 353514
+            "CashAndMarketableSecurities": 60608,
+            "AccountsReceivable": 33391,
+            "Inventory": 19784,
+            "PrepaidExpenses": 2709,
+            "TotalCurrentAssets": 116492,
+            "PropertyAndEquipment": 9780,
+            "OperatingLeaseAssets": 2281,
+            "Goodwill": 6261,
+            "IntangibleAssets": 936,
+            "DeferredTaxAssets": 13674,
+            "OtherAssets": 11724,
+            "TotalAssets": 161148
         },
         "Liabilities": {
-            "AccountsPayable": 58146,
-            "ShortTermDebt": 10954,
-            "LongTermDebt": 95088,
-            "TotalLiabilities": 279414
+            "AccountsPayable": 8624,
+            "AccruedLiabilities": 16452,
+            "ShortTermDebt": 999,
+            "TotalCurrentLiabilities": 26075,
+            "LongTermDebt": 7468,
+            "OperatingLeaseLiabilities": 2014,
+            "OtherLongTermLiabilities": 6694,
+            "TotalLiabilities": 42251
         },
         "Equity": {
-            "RetainedEarnings": 8242,
-            "CommonStock": 75236,
-            "TotalEquity": 74100
-        },
-        "Cash": 40760,
-        "ShortTermDebt": 10954,
-        "LongTermDebt": 95088,
-        "AccountsReceivable": 23194,
-        "Inventory": 6511,
-        "AccountsPayable": 58146
+            "TotalEquity": 118897
+        }
     },
     "cash_flow": {
-        "NetIncome": 33916,
-        "Depreciation": 2848,
-        "ChangeInWorkingCapital": 4527,
-        "CashFromOperations": 39895,
-        "CapEx": -2392,
-        "CashFromInvesting": 1927,
+        "NetIncome": 31910,
+        "Depreciation": 752,
+        "StockBasedCompensation": 1655,
+        "DeferredTaxes": 124,
+        "GainsOnEquityInvestments": -1354,
+        "OtherAdjustments": -80,
+        "ChangeInWorkingCapital": -9257,
+        "CashFromOperations": 23750,
+        "CapEx": 1637,
+        "FreeCashFlow": 22089,
+        "CashFromInvesting": -9025,
+        "ShareRepurchases": 12456,
+        "EmployeeStockPlanTaxes": 2429,
+        "Dividends": 243,
         "DebtRepayment": 0,
-        "Dividends": -3825,
-        "CashFromFinancing": -30585,
-        "NetChangeInCash": 11237,
-        "FreeCashFlow": 37503,
-        "ShareRepurchases": -20139
+        "CashFromFinancing": -14878,
+        "NetChangeInCash": -153,
+        "CashBeginning": 11639,
+        "CashEnding": 11486
     },
-    "segment_data": [
-        {
-            "segment_name": "Americas",
-            "revenue": 50430,
-            "operating_income": null
-        },
-        {
-            "segment_name": "Europe",
-            "revenue": 30397,
-            "operating_income": null
-        },
-        {
-            "segment_name": "Greater China",
-            "revenue": 20819,
-            "operating_income": null
-        },
-        {
-            "segment_name": "Japan",
-            "revenue": 7767,
-            "operating_income": null
-        },
-        {
-            "segment_name": "Rest of Asia Pacific",
-            "revenue": 10162,
-            "operating_income": null
-        }
-    ],
+    "segment_data": {
+        "DataCenter": 51200,
+        "Gaming": 4300,
+        "ProfessionalVisualization": 760,
+        "AutomotiveAndRobotics": 592
+    },
+    "geographic_data": null,
+    "non_gaap_metrics": {
+        "NonGAAP_GrossMargin": 0.736,
+        "NonGAAP_OpEx": 4215,
+        "NonGAAP_OperatingIncome": 37752,
+        "NonGAAP_NetIncome": 31767
+    },
+    "forward_looking": {
+        "Q4_FY26_Revenue_Guidance": 65000,
+        "Q4_GAAP_GrossMargin": 0.748,
+        "Q4_NonGAAP_GrossMargin": 0.75,
+        "Q4_GAAP_OpEx": 6650,
+        "Q4_NonGAAP_OpEx": 5000,
+        "TaxRate": 0.17
+    },
     "kpis": {
-        "RevenueGrowth": 0.0207,
-        "EBITDAMargin": 0.3376,
-        "TaxRate": 0.159,
-        "GrossMargin": 0.4588,
-        "ServicesRevenuePct": 0.1933
+        "Revenue_QoQ_Growth": 0.22,
+        "Revenue_YoY_Growth": 0.62,
+        "EBITDA_Margin": 0.6446,
+        "FCF_Margin": 0.3877,
+        "OperatingMargin": 0.6316,
+        "NetMargin": 0.5596
     },
+    "legal_regulatory": null,
     "notes": {
-        "Entity": "Apple Inc. (AAPL)",
-        "Period": "FY24 Q1 (Oct 1, 2023 - Dec 30, 2023)",
-        "Currency": "USD millions",
-        "OpEx": "Operating expenses include R&D ($7,696M) and SG&A ($6,786M)",
-        "Products": "Product revenue: $96,458M | Services revenue: $23,117M",
-        "Geography": "Americas: $50,430M | Europe: $30,397M | Greater China: $20,819M | Japan: $7,767M | Rest of Asia Pacific: $10,162M"
+        "H20_Charges": "Insignificant in Q3 FY26",
+        "StockBuybackAuthorizationRemaining": 62200
     },
-    "index": {
-        "Revenue": "Condensed Consolidated Statements of Operations, Net Sales",
-        "CostOfGoodsSold": "Condensed Consolidated Statements of Operations, Cost of Sales",
-        "OpEx": "Condensed Consolidated Statements of Operations, Total Operating Expenses",
-        "NetIncome": "Condensed Consolidated Statements of Operations, Net Income",
-        "Cash": "Condensed Consolidated Balance Sheets, Cash and Cash Equivalents",
-        "TotalAssets": "Condensed Consolidated Balance Sheets, Total Assets"
+    "source_metadata": {
+        "source_pdf": "/mnt/data/NVIDIAAn.pdf",
+        "period": "Q3 FY2026",
+        "ended": "October 26 2025",
+        "currency": "USD millions",
+        "verified_against_pdf": true
     }
 }

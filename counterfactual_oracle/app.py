@@ -21,6 +21,11 @@ st.set_page_config(
 with open("counterfactual_oracle/styles.css") as f:
     st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
+# Helper function to format currency (values already in millions)
+def format_currency(value, decimals=0):
+    """Format currency values with commas (no suffix)"""
+    return f"${value:,.{decimals}f}"
+
 # Sidebar
 with st.sidebar:
     # Header with branding
@@ -48,6 +53,26 @@ with st.sidebar:
     
     # Scenario Controls
     st.markdown('<p class="metric-label">Scenario Controls</p>', unsafe_allow_html=True)
+    
+    with st.expander("ℹ️ How to use these controls"):
+        st.markdown("""
+        **Adjust these sliders to create "What-If" scenarios:**
+        
+        📉 **OpEx Delta**: Changes Operating Expenses.
+        - **Negative (-)**: Cost cutting (Higher Profit)
+        - **Positive (+)**: More spending (Lower Profit)
+        
+        📈 **Revenue Growth Delta**: Changes future sales.
+        - **Positive (+)**: Faster growth
+        - **Negative (-)**: Slower growth or decline
+        
+        💰 **Discount Rate Delta**: Adjusts valuation risk.
+        - **Higher (+)**: Future cash is worth less (Lower Valuation)
+        - **Lower (-)**: Future cash is worth more (Higher Valuation)
+        
+        *Note: 100 bps (basis points) = 1%*
+        """)
+
     opex_delta = st.slider("OpEx Delta", -500, 500, 0, help="Basis points change in operating expenses")
     st.markdown(f'<div style="text-align: right; margin-top: -1rem; margin-bottom: 0.5rem;"><span class="mono" style="color: var(--primary); font-size: 0.875rem;">{opex_delta:+d} bps</span></div>', unsafe_allow_html=True)
     
@@ -165,7 +190,7 @@ if report is not None:
                 st.markdown(f"""
                 <div class="metric-card">
                     <p class="metric-label">R&D Spending</p>
-                    <p class="metric-value">${report.income_statement.RnD:,.0f}</p>
+                    <p class="metric-value">{format_currency(report.income_statement.RnD)}</p>
                     <p class="metric-subtitle">{(report.income_statement.RnD / report.income_statement.Revenue * 100):.1f}% of revenue</p>
                 </div>
                 """, unsafe_allow_html=True)
@@ -177,7 +202,7 @@ if report is not None:
                 st.markdown(f"""
                 <div class="metric-card">
                     <p class="metric-label">SG&A Expenses</p>
-                    <p class="metric-value">${report.income_statement.SGA:,.0f}</p>
+                    <p class="metric-value">{format_currency(report.income_statement.SGA)}</p>
                     <p class="metric-subtitle">{(report.income_statement.SGA / report.income_statement.Revenue * 100):.1f}% of revenue</p>
                 </div>
                 """, unsafe_allow_html=True)
@@ -188,7 +213,7 @@ if report is not None:
             st.markdown(f"""
             <div class="metric-card">
                 <p class="metric-label">Total OpEx</p>
-                <p class="metric-value">${report.income_statement.OpEx:,.0f}</p>
+                <p class="metric-value">{format_currency(report.income_statement.OpEx)}</p>
                 <p class="metric-subtitle">{(report.income_statement.OpEx / report.income_statement.Revenue * 100):.1f}% of revenue</p>
             </div>
             """, unsafe_allow_html=True)
@@ -202,7 +227,7 @@ if report is not None:
             st.markdown(f"""
             <div class="metric-card">
                 <p class="metric-label">Free Cash Flow</p>
-                <p class="metric-value" style="color: var(--success);">${report.cash_flow.FreeCashFlow:,.0f}</p>
+                <p class="metric-value" style="color: var(--success);">{format_currency(report.cash_flow.FreeCashFlow)}</p>
                 <p class="metric-subtitle">CFO - CapEx</p>
             </div>
             """, unsafe_allow_html=True)
@@ -211,7 +236,7 @@ if report is not None:
             st.markdown(f"""
             <div class="metric-card">
                 <p class="metric-label">Cash from Operations</p>
-                <p class="metric-value">${report.cash_flow.CashFromOperations:,.0f}</p>
+                <p class="metric-value">{format_currency(report.cash_flow.CashFromOperations)}</p>
                 <p class="metric-subtitle">Operating cash generation</p>
             </div>
             """, unsafe_allow_html=True)
@@ -371,7 +396,7 @@ if report is not None:
             st.markdown(f"""
             <div class="metric-card">
                 <p class="metric-label">Projected NPV</p>
-                <p class="metric-value">${simulation_results.median_npv:,.0f}</p>
+                <p class="metric-value">{format_currency(simulation_results.median_npv)}</p>
                 <p class="metric-subtitle">Net Present Value @ 8.5% discount</p>
             </div>
             """, unsafe_allow_html=True)
@@ -380,7 +405,7 @@ if report is not None:
             st.markdown(f"""
             <div class="metric-card">
                 <p class="metric-label">Median Revenue</p>
-                <p class="metric-value" style="color: var(--success);">${simulation_results.median_revenue:,.0f}</p>
+                <p class="metric-value" style="color: var(--success);">{format_currency(simulation_results.median_revenue)}</p>
                 <p class="metric-subtitle">Projected annual revenue</p>
             </div>
             """, unsafe_allow_html=True)
@@ -389,7 +414,7 @@ if report is not None:
             st.markdown(f"""
             <div class="metric-card">
                 <p class="metric-label">Median EBITDA</p>
-                <p class="metric-value" style="color: var(--accent);">${simulation_results.median_ebitda:,.0f}</p>
+                <p class="metric-value" style="color: var(--accent);">{format_currency(simulation_results.median_ebitda)}</p>
                 <p class="metric-subtitle">Earnings before interest, tax, D&A</p>
             </div>
             """, unsafe_allow_html=True)
@@ -439,7 +464,7 @@ if report is not None:
                     from src.agents.debate_agent import DebateAgent
                 
                     debate_agent = DebateAgent(
-                        gemini_api_key=os.getenv("GEMINI_API_KEY"),
+                        kimi_api_key=os.getenv("KIMI_API_KEY"),
                         deepseek_api_key=os.getenv("DEEPSEEK_API_KEY")
                     )
                 
@@ -447,7 +472,7 @@ if report is not None:
                         report=report,
                         simulation=st.session_state.simulation_results,
                         params=st.session_state.params,  # Use params from session state
-                        max_rounds=10
+                        max_rounds=5
                     )
                 
                 st.success(f"✅ Debate completed in {st.session_state.debate_result.total_rounds} rounds!")
@@ -478,7 +503,7 @@ if report is not None:
             with st.expander("📜 View Full Debate Transcript", expanded=True):
                 for turn in debate.debate_log:
                     # Determine color based on speaker
-                    if turn.speaker == "Gemini":
+                    if turn.speaker == "Kimi":
                         bg_color = "rgba(16, 185, 129, 0.1)"  # Green tint
                         border_color = "#10B981"
                         icon = "🟢"

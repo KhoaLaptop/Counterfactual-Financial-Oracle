@@ -1,0 +1,102 @@
+{
+    "income_statement": {
+        "Revenue": 57006,
+        "CostOfGoodsSold": 15157,
+        "GrossProfit": 41849,
+        "OpEx": 5839,
+        "EBITDA": 36762,
+        "DepreciationAndAmortization": 752,
+        "EBIT": 36010,
+        "InterestExpense": -61,
+        "Taxes": 6026,
+        "NetIncome": 31910,
+        "RnD": 4705,
+        "SGA": 1134
+    },
+    "balance_sheet": {
+        "Assets": {
+            "Cash": 60608,
+            "AccountsReceivable": 33391,
+            "Inventory": 19784,
+            "PropertyPlantEquipment": 9780,
+            "TotalAssets": 161148
+        },
+        "Liabilities": {
+            "AccountsPayable": 8624,
+            "ShortTermDebt": 999,
+            "LongTermDebt": 7468,
+            "TotalLiabilities": 42251
+        },
+        "Equity": {
+            "TotalEquity": 118897
+        },
+        "Cash": 60608,
+        "ShortTermDebt": 999,
+        "LongTermDebt": 7468,
+        "AccountsReceivable": 33391,
+        "Inventory": 19784,
+        "AccountsPayable": 8624
+    },
+    "cash_flow": {
+        "NetIncome": 31910,
+        "Depreciation": 752,
+        "ChangeInWorkingCapital": -8963,
+        "CashFromOperations": 23750,
+        "CapEx": -1637,
+        "CashFromInvesting": -9025,
+        "DebtRepayment": 0,
+        "Dividends": -243,
+        "CashFromFinancing": -14878,
+        "NetChangeInCash": -153,
+        "FreeCashFlow": 22089,
+        "ShareRepurchases": -12456
+    },
+    "segment_data": [
+        {
+            "segment_name": "Data Center",
+            "revenue": 51200,
+            "operating_income": null
+        },
+        {
+            "segment_name": "Gaming",
+            "revenue": 4300,
+            "operating_income": null
+        },
+        {
+            "segment_name": "Professional Visualization",
+            "revenue": 760,
+            "operating_income": null
+        },
+        {
+            "segment_name": "Automotive",
+            "revenue": 375,
+            "operating_income": null
+        }
+    ],
+    "kpis": {
+        "RevenueGrowth": 0.62,
+        "EBITDAMargin": 0.6449,
+        "TaxRate": 0.159,
+        "GrossMargin": 0.734,
+        "FCFMargin": 0.388
+    },
+    "notes": {
+        "Entity": "NVIDIA Corporation (NVDA)",
+        "Period": "Q3 FY2026 (ended October 26, 2025)",
+        "Currency": "USD millions",
+        "OpEx": "Operating expenses include R&D ($4,705M) and SG&A ($1,134M)",
+        "ChangeInWorkingCapital": "A/R: -5,583 | Inventory: -4,823 | A/P: -223 | Accrued: +1,129 = -8,963",
+        "FreeCashFlow": "CFO ($23,750M) - CapEx ($1,637M) - Principal payments ($24M) = $22,089M",
+        "Products": "Data Center dominates at $51.2B (90% of revenue)"
+    },
+    "index": {
+        "Revenue": "Condensed Consolidated Statements of Income, p.4",
+        "CostOfGoodsSold": "Condensed Consolidated Statements of Income, Cost of revenue, p.4",
+        "GrossProfit": "Condensed Consolidated Statements of Income, p.4",
+        "OpEx": "Condensed Consolidated Statements of Income, Total operating expenses, p.4",
+        "NetIncome": "Condensed Consolidated Statements of Income, p.4",
+        "Cash": "Condensed Consolidated Balance Sheets, p.5",
+        "TotalAssets": "Condensed Consolidated Balance Sheets, p.5",
+        "FreeCashFlow": "Reconciliation of GAAP to Non-GAAP, Free cash flow, p.7"
+    }
+}
