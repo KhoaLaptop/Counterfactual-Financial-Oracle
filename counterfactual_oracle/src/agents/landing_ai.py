@@ -51,9 +51,9 @@ class LandingAIClient:
         print(f"Landing AI response saved to: {debug_file}")
         
         # Transform Landing AI response into our FinancialReport structure
-        return self._parse_landing_ai_response(raw_data)
+        return self.parse_landing_ai_response(raw_data)
     
-    def _parse_landing_ai_response(self, raw_data: Dict[str, Any]) -> FinancialReport:
+    def parse_landing_ai_response(self, raw_data: Dict[str, Any]) -> FinancialReport:
         """
         Parses the Landing AI ADE response and transforms it into our FinancialReport model.
         Landing AI returns data in markdown format with HTML tables.

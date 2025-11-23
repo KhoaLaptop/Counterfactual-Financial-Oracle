@@ -18,7 +18,8 @@ st.set_page_config(
 )
 
 # Load custom CSS
-with open("counterfactual_oracle/styles.css") as f:
+css_path = "styles.css" if os.path.exists("styles.css") else "counterfactual_oracle/styles.css"
+with open(css_path) as f:
     st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
 # Helper function to format currency (values already in millions)
@@ -123,7 +124,9 @@ with upload_tab1:
     
     if uploaded_file is not None:
         # Save uploaded file temporarily
-        temp_pdf_path = f"/tmp/{uploaded_file.name}"
+        import tempfile
+        temp_dir = tempfile.gettempdir()
+        temp_pdf_path = os.path.join(temp_dir, uploaded_file.name)
         with open(temp_pdf_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
         
@@ -148,7 +151,7 @@ with upload_tab1:
 
 with upload_tab2:
     st.markdown("**Upload a pre-extracted JSON file** to skip Landing AI API call")
-    st.markdown('<p style="font-size: 0.75rem; color: var(--muted-foreground);">Use this if you already have extracted financial data in JSON format</p>', unsafe_allow_html=True)
+    st.markdown('<p style="font-size: 0.75rem; color: var(--muted-foreground);">Use this if you already have extracted financial data in JSON format (or raw Landing AI response)</p>', unsafe_allow_html=True)
     
     uploaded_json = st.file_uploader("", type=["json"], key="json_uploader", label_visibility="collapsed")
     
@@ -156,11 +159,26 @@ with upload_tab2:
         try:
             import json
             json_data = json.load(uploaded_json)
-            report = FinancialReport(**json_data)
-            st.success("✅ JSON data loaded successfully!")
+            
+            # Check if this is a raw Landing AI response (has 'markdown' field)
+            if 'markdown' in json_data or 'failed_pages' in json_data:
+                # This is a raw Landing AI response, parse it
+                with st.spinner("Processing Landing AI response format..."):
+                    report = landing_client.parse_landing_ai_response(json_data)
+                st.success("✅ Landing AI response processed successfully!")
+            else:
+                # This should be a properly formatted FinancialReport JSON
+                report = FinancialReport(**json_data)
+                st.success("✅ JSON data loaded successfully!")
         except Exception as e:
             st.error(f"Error loading JSON: {str(e)}")
-            st.markdown("**Expected JSON format**: FinancialReport model structure")
+            st.markdown("""
+            **Expected JSON formats:**
+            - **FinancialReport format**: Must have `income_statement`, `balance_sheet`, and `cash_flow` fields
+            - **Landing AI format**: Raw response with `markdown` field (will be auto-processed)
+            
+            See `counterfactual_oracle/data/apple_fy24_q1.json` for an example of the FinancialReport format.
+            """)
             st.stop()
 
 # Only proceed if we have a report from either source
@@ -188,7 +206,328 @@ if report is not None:
     with st.expander("📊 View Extracted Financial Data"):
         st.json(report.model_dump())
 
-    # === NEW: ENHANCED TIER 1 DATA DISPLAY ===
+    # === COMPREHENSIVE FINANCIAL METRICS SECTION ===
+    st.markdown("## 📈 Comprehensive Financial Metrics")
+    st.markdown('<p style="font-size: 0.875rem; color: var(--muted-foreground); margin-bottom: 1.5rem;">Calculated ratios and KPIs from financial statements</p>', unsafe_allow_html=True)
+    
+    # Calculate all metrics
+    income_stmt = report.income_statement
+    bs = report.balance_sheet
+    cf = report.cash_flow
+    
+    revenue = income_stmt.Revenue
+    gross_profit = income_stmt.GrossProfit
+    ebitda = income_stmt.EBITDA
+    ebit = income_stmt.EBIT
+    net_income = income_stmt.NetIncome
+    total_assets = bs.Assets.get('TotalAssets', 0)
+    total_liabilities = bs.Liabilities.get('TotalLiabilities', 0)
+    total_equity = bs.Equity.get('TotalEquity', 0)
+    cash = bs.Cash or 0
+    ar = bs.AccountsReceivable or 0
+    inventory = bs.Inventory or 0
+    ap = bs.AccountsPayable or 0
+    short_term_debt = bs.ShortTermDebt or 0
+    long_term_debt = bs.LongTermDebt or 0
+    total_debt = short_term_debt + long_term_debt
+    
+    # Profitability Ratios
+    st.markdown("### 💰 Profitability Ratios")
+    prof_col1, prof_col2, prof_col3, prof_col4 = st.columns(4)
+    
+    with prof_col1:
+        gross_margin = (gross_profit / revenue * 100) if revenue > 0 else 0
+        st.markdown(f"""
+        <div class="metric-card">
+            <p class="metric-label">Gross Margin</p>
+            <p class="metric-value" style="color: var(--success);">{gross_margin:.1f}%</p>
+            <p class="metric-subtitle">Gross Profit / Revenue</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with prof_col2:
+        operating_margin = (ebit / revenue * 100) if revenue > 0 else 0
+        st.markdown(f"""
+        <div class="metric-card">
+            <p class="metric-label">Operating Margin</p>
+            <p class="metric-value" style="color: var(--accent);">{operating_margin:.1f}%</p>
+            <p class="metric-subtitle">EBIT / Revenue</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with prof_col3:
+        ebitda_margin = (ebitda / revenue * 100) if revenue > 0 else 0
+        st.markdown(f"""
+        <div class="metric-card">
+            <p class="metric-label">EBITDA Margin</p>
+            <p class="metric-value" style="color: var(--primary);">{ebitda_margin:.1f}%</p>
+            <p class="metric-subtitle">EBITDA / Revenue</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with prof_col4:
+        net_margin = (net_income / revenue * 100) if revenue > 0 else 0
+        st.markdown(f"""
+        <div class="metric-card">
+            <p class="metric-label">Net Margin</p>
+            <p class="metric-value" style="color: var(--warning);">{net_margin:.1f}%</p>
+            <p class="metric-subtitle">Net Income / Revenue</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Return Ratios
+    st.markdown("### 📊 Return Ratios")
+    return_col1, return_col2, return_col3 = st.columns(3)
+    
+    with return_col1:
+        roe = (net_income / total_equity * 100) if total_equity > 0 else 0
+        st.markdown(f"""
+        <div class="metric-card">
+            <p class="metric-label">Return on Equity (ROE)</p>
+            <p class="metric-value" style="color: var(--success);">{roe:.1f}%</p>
+            <p class="metric-subtitle">Net Income / Equity</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with return_col2:
+        roa = (net_income / total_assets * 100) if total_assets > 0 else 0
+        st.markdown(f"""
+        <div class="metric-card">
+            <p class="metric-label">Return on Assets (ROA)</p>
+            <p class="metric-value" style="color: var(--accent);">{roa:.1f}%</p>
+            <p class="metric-subtitle">Net Income / Assets</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with return_col3:
+        roic = (ebit / (total_assets - cash) * 100) if (total_assets - cash) > 0 else 0
+        st.markdown(f"""
+        <div class="metric-card">
+            <p class="metric-label">ROIC</p>
+            <p class="metric-value" style="color: var(--primary);">{roic:.1f}%</p>
+            <p class="metric-subtitle">EBIT / (Assets - Cash)</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Leverage Ratios
+    st.markdown("### ⚖️ Leverage & Debt Ratios")
+    lev_col1, lev_col2, lev_col3, lev_col4 = st.columns(4)
+    
+    with lev_col1:
+        debt_to_equity = (total_debt / total_equity) if total_equity > 0 else 0
+        st.markdown(f"""
+        <div class="metric-card">
+            <p class="metric-label">Debt-to-Equity</p>
+            <p class="metric-value" style="color: var(--warning);">{debt_to_equity:.2f}x</p>
+            <p class="metric-subtitle">Total Debt / Equity</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with lev_col2:
+        debt_to_assets = (total_debt / total_assets) if total_assets > 0 else 0
+        st.markdown(f"""
+        <div class="metric-card">
+            <p class="metric-label">Debt-to-Assets</p>
+            <p class="metric-value" style="color: var(--warning);">{debt_to_assets:.2f}x</p>
+            <p class="metric-subtitle">Total Debt / Assets</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with lev_col3:
+        debt_to_ebitda = (total_debt / ebitda) if ebitda > 0 else 0
+        st.markdown(f"""
+        <div class="metric-card">
+            <p class="metric-label">Debt-to-EBITDA</p>
+            <p class="metric-value" style="color: var(--warning);">{debt_to_ebitda:.2f}x</p>
+            <p class="metric-subtitle">Total Debt / EBITDA</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with lev_col4:
+        equity_ratio = (total_equity / total_assets * 100) if total_assets > 0 else 0
+        st.markdown(f"""
+        <div class="metric-card">
+            <p class="metric-label">Equity Ratio</p>
+            <p class="metric-value" style="color: var(--success);">{equity_ratio:.1f}%</p>
+            <p class="metric-subtitle">Equity / Assets</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Liquidity Ratios
+    st.markdown("### 💧 Liquidity Ratios")
+    liq_col1, liq_col2, liq_col3 = st.columns(3)
+    
+    current_assets = cash + ar + inventory
+    current_liabilities = ap + short_term_debt
+    
+    with liq_col1:
+        current_ratio = (current_assets / current_liabilities) if current_liabilities > 0 else 0
+        st.markdown(f"""
+        <div class="metric-card">
+            <p class="metric-label">Current Ratio</p>
+            <p class="metric-value" style="color: var(--accent);">{current_ratio:.2f}x</p>
+            <p class="metric-subtitle">Current Assets / Current Liabilities</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with liq_col2:
+        quick_ratio = ((cash + ar) / current_liabilities) if current_liabilities > 0 else 0
+        st.markdown(f"""
+        <div class="metric-card">
+            <p class="metric-label">Quick Ratio</p>
+            <p class="metric-value" style="color: var(--accent);">{quick_ratio:.2f}x</p>
+            <p class="metric-subtitle">(Cash + AR) / Current Liabilities</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with liq_col3:
+        cash_ratio = (cash / current_liabilities) if current_liabilities > 0 else 0
+        st.markdown(f"""
+        <div class="metric-card">
+            <p class="metric-label">Cash Ratio</p>
+            <p class="metric-value" style="color: var(--accent);">{cash_ratio:.2f}x</p>
+            <p class="metric-subtitle">Cash / Current Liabilities</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Coverage Ratios
+    st.markdown("### 🛡️ Coverage Ratios")
+    cov_col1, cov_col2 = st.columns(2)
+    
+    with cov_col1:
+        interest_coverage = (ebit / income_stmt.InterestExpense) if income_stmt.InterestExpense > 0 else float('inf')
+        coverage_display = f"{interest_coverage:.2f}x" if interest_coverage != float('inf') else "N/A"
+        st.markdown(f"""
+        <div class="metric-card">
+            <p class="metric-label">Interest Coverage</p>
+            <p class="metric-value" style="color: var(--success);">{coverage_display}</p>
+            <p class="metric-subtitle">EBIT / Interest Expense</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with cov_col2:
+        if cf.FreeCashFlow and total_debt > 0:
+            fcf_to_debt = cf.FreeCashFlow / total_debt
+            st.markdown(f"""
+            <div class="metric-card">
+                <p class="metric-label">FCF to Debt</p>
+                <p class="metric-value" style="color: var(--success);">{fcf_to_debt:.2f}x</p>
+                <p class="metric-subtitle">Free Cash Flow / Total Debt</p>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.info("FCF to Debt: Data not available")
+    
+    # Efficiency Ratios
+    st.markdown("### ⚡ Efficiency Ratios")
+    eff_col1, eff_col2, eff_col3 = st.columns(3)
+    
+    with eff_col1:
+        asset_turnover = (revenue / total_assets) if total_assets > 0 else 0
+        st.markdown(f"""
+        <div class="metric-card">
+            <p class="metric-label">Asset Turnover</p>
+            <p class="metric-value" style="color: var(--primary);">{asset_turnover:.2f}x</p>
+            <p class="metric-subtitle">Revenue / Assets</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with eff_col2:
+        if inventory > 0:
+            # Approximate inventory turnover (using COGS)
+            inventory_turnover = (income_stmt.CostOfGoodsSold / inventory) if inventory > 0 else 0
+            st.markdown(f"""
+            <div class="metric-card">
+                <p class="metric-label">Inventory Turnover</p>
+                <p class="metric-value" style="color: var(--primary);">{inventory_turnover:.2f}x</p>
+                <p class="metric-subtitle">COGS / Inventory</p>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.info("Inventory Turnover: Data not available")
+    
+    with eff_col3:
+        if ar > 0:
+            # Days Sales Outstanding (approximate)
+            dso = (ar / revenue * 365) if revenue > 0 else 0
+            st.markdown(f"""
+            <div class="metric-card">
+                <p class="metric-label">Days Sales Outstanding</p>
+                <p class="metric-value" style="color: var(--primary);">{dso:.0f} days</p>
+                <p class="metric-subtitle">(AR / Revenue) × 365</p>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.info("DSO: Data not available")
+    
+    # Additional Income Statement Metrics
+    st.markdown("### 📋 Additional Income Statement Metrics")
+    inc_col1, inc_col2, inc_col3, inc_col4 = st.columns(4)
+    
+    with inc_col1:
+        st.metric("Gross Profit", f"${gross_profit:,.0f}")
+    
+    with inc_col2:
+        st.metric("EBIT", f"${ebit:,.0f}")
+    
+    with inc_col3:
+        tax_rate = (income_stmt.Taxes / (ebit - income_stmt.InterestExpense) * 100) if (ebit - income_stmt.InterestExpense) > 0 else 0
+        st.metric("Effective Tax Rate", f"{tax_rate:.1f}%")
+    
+    with inc_col4:
+        st.metric("Interest Expense", f"${income_stmt.InterestExpense:,.0f}")
+    
+    # Additional Balance Sheet Metrics
+    st.markdown("### 🏦 Additional Balance Sheet Metrics")
+    bal_col1, bal_col2, bal_col3, bal_col4 = st.columns(4)
+    
+    with bal_col1:
+        st.metric("Total Assets", f"${total_assets:,.0f}")
+    
+    with bal_col2:
+        st.metric("Total Liabilities", f"${total_liabilities:,.0f}")
+    
+    with bal_col3:
+        st.metric("Total Equity", f"${total_equity:,.0f}")
+    
+    with bal_col4:
+        working_capital = current_assets - current_liabilities
+        st.metric("Working Capital", f"${working_capital:,.0f}")
+    
+    # Additional Cash Flow Metrics
+    st.markdown("### 💵 Additional Cash Flow Metrics")
+    cash_col1, cash_col2, cash_col3, cash_col4 = st.columns(4)
+    
+    with cash_col1:
+        st.metric("CapEx", f"${cf.CapEx:,.0f}")
+    
+    with cash_col2:
+        st.metric("Dividends Paid", f"${cf.Dividends:,.0f}")
+    
+    with cash_col3:
+        st.metric("Net Change in Cash", f"${cf.NetChangeInCash:,.0f}")
+    
+    with cash_col4:
+        if cf.ShareRepurchases:
+            st.metric("Share Repurchases", f"${cf.ShareRepurchases:,.0f}")
+        else:
+            st.metric("Share Repurchases", "N/A")
+    
+    # Display KPIs from report.kpis if available
+    if report.kpis and len(report.kpis) > 0:
+        st.markdown("### 🎯 Additional KPIs from Report")
+        kpi_cols = st.columns(min(len(report.kpis), 4))
+        for idx, (kpi_name, kpi_value) in enumerate(report.kpis.items()):
+            with kpi_cols[idx % 4]:
+                if isinstance(kpi_value, (int, float)):
+                    if kpi_value < 1 and kpi_value > -1:
+                        st.metric(kpi_name, f"{kpi_value:.2%}")
+                    else:
+                        st.metric(kpi_name, f"{kpi_value:,.2f}")
+                else:
+                    st.metric(kpi_name, str(kpi_value))
+
+    # === ENHANCED TIER 1 DATA DISPLAY ===
 
     # Expense Breakdown (if R&D and SG&A are available)
     if report.income_statement.RnD is not None or report.income_statement.SGA is not None:
