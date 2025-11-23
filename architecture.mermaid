@@ -1,0 +1,43 @@
+graph TD
+    subgraph Input_Layer ["Input Layer"]
+        A["PDF Upload"] --> B["Landing AI ADE API"]
+        A2["JSON Upload"] --> C
+    end
+
+    subgraph Data_Processing ["Data Processing"]
+        B --> C["Financial Report Parser"]
+        C --> D["FinancialReport Model (Pydantic)"]
+    end
+
+    subgraph Analysis_Layer ["Analysis Layer"]
+        D --> E["Monte Carlo Simulation Engine"]
+        E --> F["SimulationResult"]
+        P["Scenario Parameters"] --> E
+    end
+
+    subgraph AI_Agents_Layer ["AI Agents Layer"]
+        F --> G["Debate Flow"]
+        
+        subgraph Debate_System ["Debate System"]
+            H["OpenAI Agent (Optimist)"] <--> I["DeepSeek Agent (Critic)"]
+            H --> J["LLM Convergence Check"]
+            I --> J
+        end
+        
+        G --> H
+        G --> I
+        J --> K{"Converged?"}
+        K -- Yes --> L["Consensus Synthesis"]
+        K -- No --> H
+    end
+
+    subgraph Output_Layer ["Output Layer"]
+        L --> M["Interactive Dashboard (Streamlit)"]
+        L --> N["PDF Report Generator"]
+        N --> O["PDF Document"]
+    end
+
+    style H fill:#10B981,stroke:#059669,color:white
+    style I fill:#EF4444,stroke:#DC2626,color:white
+    style B fill:#3B82F6,stroke:#2563EB,color:white
+    style E fill:#8B5CF6,stroke:#7C3AED,color:white
