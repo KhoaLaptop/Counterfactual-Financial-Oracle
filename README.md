@@ -3,7 +3,6 @@
 > An intelligent multi-agent AI system for counterfactual financial analysis and scenario modeling
 
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.28+-red.svg)](https://streamlit.io/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ## Overview
@@ -235,8 +234,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Contact
 
 **Khoa Dang**
-- GitHub: [@KhoaLaptop](https://github.com/KhoaLaptop)
-- Project Link: [https://github.com/KhoaLaptop/Counterfactual-Financial-Oracle-67](https://github.com/KhoaLaptop/Counterfactual-Financial-Oracle-67)
+- LinkedIn: [@Anh Khoa Đặng]([https://github.com/KhoaLaptop](https://www.linkedin.com/in/anh-khoa-%C4%91%E1%BA%B7ng-ba6992316/)
 
+**Quan Pham**
+- LinkedIn: [Lê Minh Quân Phạm](https://www.linkedin.com/in/plminq/)
+
+- Project Link: [https://github.com/KhoaLaptop/Counterfactual-Financial-Oracle-67](https://github.com/KhoaLaptop/Counterfactual-Financial-Oracle-67)
 ---
 
