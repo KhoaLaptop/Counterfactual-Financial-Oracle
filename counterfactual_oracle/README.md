@@ -4,7 +4,7 @@ A production-ready web application for counterfactual financial analysis using m
 
 ## 🏗️ Architecture
 
-This project has been migrated from a Streamlit prototype to a full-stack web application:
+A production-ready full-stack web application:
 
 - **Backend**: FastAPI (Python) with SQLAlchemy
 - **Frontend**: React + TypeScript + Vite + TailwindCSS
@@ -156,16 +156,6 @@ npm test
 - Domain logic migrated from `src/` to `backend/app/domain/`
 - Background jobs use FastAPI `BackgroundTasks` (can upgrade to RQ/Celery for production)
 - Database: SQLite for local dev, PostgreSQL for production
-
-## 🔄 Migration from Streamlit
-
-The original Streamlit app (`app.py`) has been replaced with:
-- FastAPI backend for API endpoints
-- React frontend for modern UI
-- Database persistence for reports and scenarios
-- Background job processing for long-running analyses
-
-All domain logic (Monte Carlo, agents, validators) remains unchanged.
 
 ## 📄 License
 
