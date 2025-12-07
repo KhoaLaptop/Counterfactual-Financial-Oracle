@@ -169,7 +169,7 @@ counterfactual_oracle/
 - **Frontend**: Streamlit (Interactive dashboard)
 - **Backend**: Python 3.8+
 - **AI Models**:
-  - OpenAI GPT-4 (Optimistic analysis)
+  - Gemini 3.0 Pro (Optimistic analysis)
   - DeepSeek (Critical analysis)
 - **Data Processing**: Landing AI ADE API
 - **Financial Modeling**: NumPy, Pandas
