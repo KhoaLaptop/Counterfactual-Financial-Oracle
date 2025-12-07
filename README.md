@@ -234,7 +234,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Contact
 
 **Khoa Dang**
-- LinkedIn: [@Anh Khoa Đặng]([https://github.com/KhoaLaptop](https://www.linkedin.com/in/anh-khoa-%C4%91%E1%BA%B7ng-ba6992316/)
+- LinkedIn: [Anh Khoa Đặng](https://www.linkedin.com/in/anh-khoa-%C4%91%E1%BA%B7ng-ba6992316/)
 
 **Quan Pham**
 - LinkedIn: [Lê Minh Quân Phạm](https://www.linkedin.com/in/plminq/)
