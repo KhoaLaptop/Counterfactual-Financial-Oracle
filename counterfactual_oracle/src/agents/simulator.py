@@ -7,7 +7,7 @@ from ..logic import run_monte_carlo
 class SimulatorAgent:
     def __init__(self, api_key: str):
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        self.model = genai.GenerativeModel('gemini-3.0-pro')
 
     def run_simulation(self, report: FinancialReport, params: ScenarioParams) -> AggregatedSimulation:
         """

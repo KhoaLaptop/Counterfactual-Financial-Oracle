@@ -6,6 +6,28 @@ class EvaluatorAgent:
     def __init__(self):
         pass
 
+    def _sanitize_text(self, text: str) -> str:
+        """Sanitize text to be compatible with latin-1 encoding for FPDF"""
+        if not isinstance(text, str):
+            return str(text)
+            
+        replacements = {
+            '\u2018': "'",  # Left single quote
+            '\u2019': "'",  # Right single quote
+            '\u201c': '"',  # Left double quote
+            '\u201d': '"',  # Right double quote
+            '\u2013': "-",  # En dash
+            '\u2014': "-",  # Em dash
+            '\u2026': "...", # Ellipsis
+            '\u00a0': " ",  # Non-breaking space
+        }
+        
+        for char, replacement in replacements.items():
+            text = text.replace(char, replacement)
+            
+        # Final fallback: replace any remaining non-latin-1 chars with ?
+        return text.encode('latin-1', 'replace').decode('latin-1')
+
     def generate_pdf(self, simulation: AggregatedSimulation, critic: CriticVerdict, 
                      report: FinancialReport, output_path: str, debate_result: Optional[DebateResult] = None):
         pdf = FPDF()
@@ -38,7 +60,7 @@ class EvaluatorAgent:
         pdf.cell(200, 8, txt="Model Assumptions:", ln=1)
         pdf.set_font("Arial", size=10)
         for log in simulation.assumption_log:
-            pdf.multi_cell(0, 6, txt=f"  - {log}")
+            pdf.multi_cell(0, 6, txt=self._sanitize_text(f"  - {log}"))
         pdf.ln(5)
         
         # Comparative Analysis
@@ -46,7 +68,7 @@ class EvaluatorAgent:
         pdf.cell(200, 8, txt="Comparative Analysis:", ln=1)
         pdf.set_font("Arial", size=10)
         for point in critic.comparative_analysis:
-            pdf.multi_cell(0, 6, txt=f"  - {point}")
+            pdf.multi_cell(0, 6, txt=self._sanitize_text(f"  - {point}"))
         pdf.ln(5)
         
         # NEW: AI Debate Transcript (if available)
@@ -57,8 +79,8 @@ class EvaluatorAgent:
             pdf.ln(5)
             
             pdf.set_font("Arial", 'I', 10)
-            pdf.multi_cell(0, 5, txt=f"Two AI analysts debated the financial analysis for {debate_result.total_rounds} rounds. "
-                                     f"{'Consensus was reached.' if debate_result.converged else 'Healthy disagreement remained.'}")
+            pdf.multi_cell(0, 5, txt=self._sanitize_text(f"Two AI analysts debated the financial analysis for {debate_result.total_rounds} rounds. "
+                                     f"{'Consensus was reached.' if debate_result.converged else 'Healthy disagreement remained.'}"))
             pdf.ln(3)
             
             # Convergence status
@@ -98,12 +120,12 @@ class EvaluatorAgent:
                 # Speaker header
                 pdf.set_font("Arial", 'B', 10)
                 speaker_text = f"Round {turn.round_number}: {turn.speaker} ({turn.role})"
-                pdf.cell(200, 6, txt=speaker_text, ln=1)
+                pdf.cell(200, 6, txt=self._sanitize_text(speaker_text), ln=1)
                 
                 # Message content (truncate if too long)
                 pdf.set_font("Arial", size=9)
                 message = turn.message[:400] + "..." if len(turn.message) > 400 else turn.message
-                pdf.multi_cell(0, 5, txt=message)
+                pdf.multi_cell(0, 5, txt=self._sanitize_text(message))
                 pdf.ln(2)
             
             # Final verdict
@@ -120,7 +142,7 @@ class EvaluatorAgent:
                 pdf.cell(200, 7, txt="Key Agreements:", ln=1)
                 pdf.set_font("Arial", size=9)
                 for agreement in debate_result.key_agreements[:3]:
-                    pdf.multi_cell(0, 5, txt=f"  + {agreement[:150]}")
+                    pdf.multi_cell(0, 5, txt=self._sanitize_text(f"  + {agreement[:150]}"))
                 pdf.ln(2)
             
             # Remaining concerns
@@ -129,7 +151,7 @@ class EvaluatorAgent:
                 pdf.cell(200, 7, txt="Remaining Concerns:", ln=1)
                 pdf.set_font("Arial", size=9)
                 for disagreement in debate_result.key_disagreements[:2]:
-                    pdf.multi_cell(0, 5, txt=f"  - {disagreement[:150]}")
+                    pdf.multi_cell(0, 5, txt=self._sanitize_text(f"  - {disagreement[:150]}"))
                 pdf.ln(2)
         
         # NEW: Document Sources Appendix

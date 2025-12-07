@@ -471,8 +471,15 @@ if report is not None:
         st.metric("EBIT", f"${ebit:,.0f}")
     
     with inc_col3:
-        tax_rate = (income_stmt.Taxes / (ebit - income_stmt.InterestExpense) * 100) if (ebit - income_stmt.InterestExpense) > 0 else 0
-        st.metric("Effective Tax Rate", f"{tax_rate:.1f}%")
+        # Use explicit KPI for Tax Rate if available, otherwise calculate
+        if report.kpis and 'TaxRate' in report.kpis:
+             tax_rate_val = report.kpis['TaxRate']
+             # Handle both decimal (0.159) and percentage (15.9) formats if needed, 
+             # but usually KPIs are decimals. Display as percentage.
+             st.metric("Effective Tax Rate (KPI)", f"{tax_rate_val:.1%}")
+        else:
+            tax_rate = (income_stmt.Taxes / (ebit - income_stmt.InterestExpense) * 100) if (ebit - income_stmt.InterestExpense) > 0 else 0
+            st.metric("Effective Tax Rate (Calc)", f"{tax_rate:.1f}%")
     
     with inc_col4:
         st.metric("Interest Expense", f"${income_stmt.InterestExpense:,.0f}")
@@ -874,13 +881,13 @@ if report is not None:
                             <strong style="font-size: 0.875rem; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">{icon} {turn.speaker} ({turn.role})</strong>
                             <span style="font-size: 0.75rem; color: var(--muted-foreground); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">Round {turn.round_number}</span>
                         </div>
-                        <p style="margin: 0; font-size: 0.875rem; line-height: 1.6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; white-space: pre-wrap;">{turn.message.replace('$', '\$')}</p>
+                        <p style="margin: 0; font-size: 0.875rem; line-height: 1.6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; white-space: pre-wrap;">{turn.message.replace('$', '\\$')}</p>
                     </div>
                     """, unsafe_allow_html=True)
         
             # Consensus summary
             st.markdown("### 🎯 Consensus Summary")
-            st.markdown(debate.consensus_summary.replace('$', '\$'))
+            st.markdown(debate.consensus_summary.replace('$', '\\$'))
         
             # Final verdict
             st.markdown(f"""

@@ -1,4 +1,5 @@
 from openai import OpenAI
+import google.generativeai as genai
 import time
 import json
 from typing import Dict, Any, List, Optional
@@ -6,9 +7,15 @@ from ..models import FinancialReport, AggregatedSimulation
 
 class RealismValidatorAgent:
     def __init__(self, api_key: str):
-        self.client = OpenAI(
-            api_key=api_key
-        )
+        self.api_key = api_key
+        self.provider = "openai"
+        
+        if api_key.startswith("AIza"):
+            self.provider = "google"
+            genai.configure(api_key=api_key)
+            self.model = genai.GenerativeModel('gemini-3.0-pro')
+        else:
+            self.client = OpenAI(api_key=api_key)
         
         self.blocklist = [
             "new product", "product launch", "market expansion", 
@@ -70,18 +77,22 @@ class RealismValidatorAgent:
         }}
         """
         
-
-        
         try:
             # RATE LIMITING: Standard pause
             time.sleep(1)
             
-            response = self.client.chat.completions.create(
-                model="gpt-4-turbo",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1
-            )
-            text = response.choices[0].message.content
+            text = ""
+            if self.provider == "google":
+                response = self.model.generate_content(prompt)
+                text = response.text
+            else:
+                response = self.client.chat.completions.create(
+                    model="gpt-4-turbo",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.1
+                )
+                text = response.choices[0].message.content
+            
             if '```json' in text:
                 text = text.split('```json')[1].split('```')[0].strip()
             elif '```' in text:

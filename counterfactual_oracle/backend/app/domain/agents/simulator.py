@@ -25,8 +25,8 @@ class SimulatorAgent:
         
         I have run a Monte Carlo simulation with the following parameters:
         - OpEx Delta: {params.opex_delta_bps} bps
-        - Revenue Growth Delta: {params.revenue_growth_bps} bps
-        - Discount Rate Delta: {params.discount_rate_bps} bps
+        - Revenue Growth Delta: {params.revenue_growth_delta_bps} bps
+        - Discount Rate Delta: {params.discount_rate_delta_bps} bps
         
         The results are:
         - Median NPV: ${agg_results.median_npv:,.2f}
@@ -67,8 +67,9 @@ class SimulatorAgent:
             
             llm_data = json.loads(content)
             
-            # Merge LLM insights
-            agg_results.assumption_log = llm_data.get("assumption_log", agg_results.assumption_log)
+            # Merge LLM insights - PRESERVE the original deterministic assumption_log
+            # Only use LLM traceability, not assumption_log (to prevent hallucinated values)
+            # agg_results.assumption_log = llm_data.get("assumption_log", agg_results.assumption_log)  # DISABLED
             agg_results.traceability = llm_data.get("traceability", agg_results.traceability)
             
         except Exception as e:

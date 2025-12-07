@@ -236,46 +236,86 @@ class LandingAIClient:
 
         # === TIER 1: Core Financial Statements ===
         
-        # Income Statement (Use is_map)
-        revenue = get_value(is_map, ['Net sales', 'Total net sales', 'Revenue', 'Total revenue', 'Sales'])
-        cogs = get_value(is_map, ['Cost of sales', 'Total cost of sales', 'Cost of goods sold', 'Cost of revenue'])
+        # --- ANNUALIZATION LOGIC ---
+        # Detect if Income Statement data is quarterly based on column header
+        # If "Three Months Ended" is found, multiply IS values by 4 to annualize
+        is_quarterly = bool(re.search(r'three\s+months\s+ended', markdown_content, re.IGNORECASE))
+        annualization_multiplier = 4.0 if is_quarterly else 1.0
+        
+        if is_quarterly:
+            print(f"[ANNUALIZATION] Detected 'Three Months Ended' - applying 4x multiplier to Income Statement")
+        
+        # Helper to annualize income statement values
+        def annualize(value: float) -> float:
+            return value * annualization_multiplier if value else 0.0
+        
+        # Income Statement (Use is_map) - Apply annualization for quarterly data
+        revenue_raw = get_value(is_map, ['Net sales', 'Total net sales', 'Revenue', 'Total revenue', 'Sales'])
+        revenue = annualize(revenue_raw)
+        
+        cogs_raw = get_value(is_map, ['Cost of sales', 'Total cost of sales', 'Cost of goods sold', 'Cost of revenue'])
+        cogs = annualize(cogs_raw)
         
         # FIX 1: Separate Gross Profit (dollar amount) from Gross Margin (percentage)
-        gross_profit = get_value(is_map, ['Gross profit'], default=0.0)
+        gross_profit_raw = get_value(is_map, ['Gross profit'], default=0.0)
+        gross_profit = annualize(gross_profit_raw)
         # If not found, calculate it
         if gross_profit == 0 and revenue != 0 and cogs != 0:
             gross_profit = revenue - cogs
             
-        opex = get_value(is_map, ['Total operating expenses', 'Operating expenses', 'Total operating costs'])
+        opex_raw = get_value(is_map, ['Total operating expenses', 'Operating expenses', 'Total operating costs'])
+        opex = annualize(opex_raw)
         
-        operating_income = get_value(is_map, ['Operating income', 'Income from operations', 'Operating profit'])
+        operating_income_raw = get_value(is_map, ['Operating income', 'Income from operations', 'Operating profit'])
+        operating_income = annualize(operating_income_raw)
         if operating_income == 0 and gross_profit != 0 and opex != 0:
             operating_income = gross_profit - opex
             
-        net_income = get_value(is_map, ['Net income', 'Net earnings', 'Net profit', 'Net loss'])
+        net_income_raw = get_value(is_map, ['Net income', 'Net earnings', 'Net profit', 'Net loss', 'Net income (loss)'])
+        net_income = annualize(net_income_raw)
+        
+        # For Cash Flow, prefer YTD Net Income if available (to align with YTD cash flow)
+        net_income_ytd = get_value(cf_map, [
+            'Net income (loss)',
+            'Net loss',
+            'Net income'
+        ], default=None)
+        cf_net_income = net_income_ytd if net_income_ytd is not None else net_income
         
         # FIX 2: Improve SG&A extraction with better synonyms
-        rnd = get_optional_value(is_map, ['Research and development', 'R&D', 'Research & development'])
-        sga = get_optional_value(is_map, [
+        rnd_raw = get_optional_value(is_map, ['Research and development', 'R&D', 'Research & development'])
+        rnd = annualize(rnd_raw) if rnd_raw else None
+        sga_raw = get_optional_value(is_map, [
             'Sales, general and administrative', 
             'Selling, general and administrative', 
             'SG&A',
             'Sales, general & administrative'
         ])
+        sga = annualize(sga_raw) if sga_raw else None
         
         if opex == 0 and (rnd or sga):
             opex = (rnd or 0) + (sga or 0)
 
-        interest = get_value(is_map, ['Interest expense', 'Interest and dividend income'], default=0.0)
-        taxes = get_value(is_map, ['Provision for income taxes', 'Income tax expense', 'Income tax'])
+        interest_raw = get_value(is_map, ['Interest expense', 'Interest and dividend income'], default=0.0)
+        interest = annualize(interest_raw)
+        taxes_raw = get_value(is_map, ['Provision for income taxes', 'Income tax expense', 'Income tax'])
+        taxes = annualize(taxes_raw)
         
         # Try to find Depreciation in CF if not in IS (common)
-        da = get_value(is_map, ['Depreciation and amortization'], default=0.0)
-        if da == 0:
-            da = get_value(cf_map, ['Depreciation and amortization', 'Depreciation'], default=0.0)
+        da_raw = get_value(is_map, ['Depreciation and amortization'], default=0.0)
+        if da_raw == 0:
+            da_raw = get_value(cf_map, ['Depreciation and amortization', 'Depreciation'], default=0.0)
+        da = annualize(da_raw)
         
         ebit = operating_income
         ebitda = ebit + da
+        
+        # Log extracted values for debugging
+        if is_quarterly:
+            print(f"[ANNUALIZATION] Revenue: ${revenue_raw:,.0f} x4 = ${revenue:,.0f} (annualized)")
+            print(f"[ANNUALIZATION] Net Income: ${net_income_raw:,.0f} x4 = ${net_income:,.0f} (annualized)")
+        else:
+            print(f"[EXTRACTION] Revenue: ${revenue:,.0f}, Net Income: ${net_income:,.0f}")
 
         income_statement = IncomeStatement(
             Revenue=revenue,
@@ -292,6 +332,9 @@ class LandingAIClient:
             SGA=sga,
             segment_revenue=None 
         )
+
+
+
         
         # Balance Sheet (Use bs_map)
         total_assets = get_value(bs_map, ['Total assets'])
@@ -320,14 +363,22 @@ class LandingAIClient:
         short_term_debt = get_optional_value(bs_map, [
             'Short-term debt',
             'Current portion of long-term debt',
-            'Commercial paper'
+            'Commercial paper',
+            'Loans payable, net, current',
+            'Loans payable net current',
+            'Notes payable, current',
+            'Current debt'
         ])
         
         # FIX 6: Better long-term debt extraction
         long_term_debt = get_optional_value(bs_map, [
             'Long-term debt', 
             'Long term debt',
-            'Term debt'
+            'Term debt',
+            'Loans payable, net, non-current',
+            'Loans payable net non-current',
+            'Notes payable, non-current',
+            'Non-current debt'
         ])
         
         ar = get_optional_value(bs_map, ['Accounts receivable, net', 'Accounts receivable'])
@@ -349,16 +400,25 @@ class LandingAIClient:
         # Cash Flow (Use cf_map)
         cfo = get_value(cf_map, [
             'Net cash provided by operating activities',
+            'Net cash used in operating activities',
             'Cash generated by operating activities', 
-            'Cash from operations'
+            'Cash from operations',
+            'Cash flows from operating activities',
+            'Net cash from operating activities'
         ], default=0.0)
+        # Keep negative if cash is used
+        if cfo < 0:
+            cfo = cfo
         
         # FIX 7: Better CapEx extraction
         capex = get_value(cf_map, [
             'Purchases related to property and equipment and intangible assets',
             'Payments for acquisition of property, plant and equipment',
             'Capital expenditures',
-            'Purchases of property and equipment'
+            'Purchases of property and equipment',
+            'Purchase of property and equipment',
+            'Acquisitions of property, plant and equipment',
+            'Payments for property and equipment'
         ], default=0.0)
         capex = abs(capex) if capex != 0 else 0.0
         
@@ -395,7 +455,7 @@ class LandingAIClient:
         wc_change = ar_change + inv_change + ap_change + accrued_change
         
         cash_flow = CashFlow(
-            NetIncome=net_income,
+            NetIncome=cf_net_income,  # Use YTD value for cash flow alignment
             Depreciation=da,
             ChangeInWorkingCapital=wc_change,
             CashFromOperations=cfo,

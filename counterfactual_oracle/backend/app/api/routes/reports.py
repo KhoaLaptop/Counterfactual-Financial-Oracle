@@ -34,6 +34,7 @@ async def upload_report(
 
     try:
         if file and file.filename:
+            print(f"Processing upload for file: {file.filename}")
             # Handle file upload (PDF or JSON)
             file_content = await file.read()
 
@@ -83,9 +84,33 @@ async def upload_report(
             pdf_metadata = financial_report.pdf_metadata.model_dump()
 
         # Try to extract company name from report if not provided
-        if not company_name and hasattr(financial_report, "kpis"):
-            # Could extract from report data if available
-            pass
+        # Try to extract company name from report if not provided
+        if not company_name and file and file.filename:
+            # Simple heuristic to extract from filename
+            # Expected format: Company_FY23_Q1.pdf or Company_2023.pdf
+            try:
+                clean_name = file.filename.rsplit('.', 1)[0].replace('_', ' ').replace('-', ' ')
+                parts = clean_name.split()
+                
+                # Guess company name (first part)
+                if not company_name and parts:
+                    company_name = parts[0]
+                
+                # Guess fiscal year
+                if not fiscal_year:
+                    import re
+                    # Look for 20xx or FYxx
+                    for part in parts:
+                        # Match 2020-2029
+                        if re.match(r'202[0-9]', part):
+                            fiscal_year = int(part)
+                            break
+                        # Match FY23, FY24, etc.
+                        if re.match(r'fy[0-9]{2}', part.lower()):
+                            fiscal_year = 2000 + int(part.lower().replace('fy', ''))
+                            break
+            except Exception:
+                pass
 
         # Create database record
         db_report = Report(
@@ -103,6 +128,7 @@ async def upload_report(
             company_name=db_report.company_name,
             fiscal_year=db_report.fiscal_year,
             pdf_metadata=db_report.pdf_metadata,
+            report_data=db_report.report_data,
             created_at=db_report.created_at,
             updated_at=db_report.updated_at,
         )
@@ -125,7 +151,9 @@ async def get_report(
     db: Session = Depends(get_db)
 ):
     """Get report by ID"""
+    print(f"DEBUG: get_report called with ID: {report_id} (type: {type(report_id)})")
     report = db.query(Report).filter(Report.id == report_id).first()
+    print(f"DEBUG: Query result: {report}")
     if not report:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -137,6 +165,7 @@ async def get_report(
         company_name=report.company_name,
         fiscal_year=report.fiscal_year,
         pdf_metadata=report.pdf_metadata,
+        report_data=report.report_data,
         created_at=report.created_at,
         updated_at=report.updated_at
     )
@@ -149,7 +178,7 @@ async def list_reports(
     db: Session = Depends(get_db)
 ):
     """List all reports"""
-    reports = db.query(Report).offset(skip).limit(limit).all()
+    reports = db.query(Report).order_by(Report.created_at.desc()).offset(skip).limit(limit).all()
     return [
         ReportSummary(
             id=r.id,
@@ -159,5 +188,28 @@ async def list_reports(
         )
         for r in reports
     ]
+
+
+@router.delete("/{report_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_report(
+    report_id: uuid.UUID,
+    db: Session = Depends(get_db)
+):
+    """Delete a report and its related scenarios"""
+    from app.models.scenario import Scenario
+    
+    report = db.query(Report).filter(Report.id == report_id).first()
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found"
+        )
+    
+    # Delete related scenarios first (SQLite doesn't enforce CASCADE)
+    db.query(Scenario).filter(Scenario.report_id == report_id).delete()
+    
+    db.delete(report)
+    db.commit()
+    return None
 
 

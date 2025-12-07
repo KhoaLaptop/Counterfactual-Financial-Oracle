@@ -10,6 +10,7 @@ import re
 import json
 from typing import List, Tuple
 from openai import OpenAI
+import google.generativeai as genai
 
 from ..models import FinancialReport, AggregatedSimulation, DebateTurn, DebateResult
 from ..debate_prompts import (
@@ -27,10 +28,14 @@ from .validator import RealismValidatorAgent
 class DebateAgent:
     def __init__(self, openai_api_key: str, deepseek_api_key: str):
         """Initialize debate agent with API clients"""
-        # OpenAI (Optimist) - using gpt-4o
-        self.openai = OpenAI(
-            api_key=openai_api_key
-        )
+        # OpenAI (Optimist) - OR Gemini if Google Key provided
+        self.optimist_provider = "openai"
+        if openai_api_key.startswith("AIza"):
+            self.optimist_provider = "google"
+            genai.configure(api_key=openai_api_key)
+            self.optimist_model = genai.GenerativeModel('gemini-3.0-pro')
+        else:
+            self.openai = OpenAI(api_key=openai_api_key)
         
         # DeepSeek (Skeptic)  
         self.deepseek = OpenAI(
@@ -176,12 +181,17 @@ class DebateAgent:
             time.sleep(2)
             
             try:
-                response = self.openai.chat.completions.create(
-                    model="gpt-4-turbo",
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.7
-                )
-                text = response.choices[0].message.content
+                text = ""
+                if self.optimist_provider == "google":
+                    response = self.optimist_model.generate_content(prompt)
+                    text = response.text
+                else:
+                    response = self.openai.chat.completions.create(
+                        model="gpt-4-turbo",
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=0.7
+                    )
+                    text = response.choices[0].message.content
                 
                 # Validate
                 validation = self.validator.validate_statement(text, report, simulation)
@@ -223,12 +233,17 @@ class DebateAgent:
             time.sleep(2)
             
             try:
-                response = self.openai.chat.completions.create(
-                    model="gpt-4-turbo",
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.7
-                )
-                text = response.choices[0].message.content
+                text = ""
+                if self.optimist_provider == "google":
+                    response = self.optimist_model.generate_content(prompt)
+                    text = response.text
+                else:
+                    response = self.openai.chat.completions.create(
+                        model="gpt-4-turbo",
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=0.7
+                    )
+                    text = response.choices[0].message.content
                 
                 # Validate
                 validation = self.validator.validate_statement(text, report, simulation)
@@ -308,12 +323,17 @@ class DebateAgent:
             # RATE LIMITING: Standard pause
             time.sleep(1)
             
-            response = self.openai.chat.completions.create(
-                model="gpt-4-turbo",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1
-            )
-            result = response.choices[0].message.content.strip().upper()
+            result = ""
+            if self.optimist_provider == "google":
+                response = self.optimist_model.generate_content(prompt)
+                result = response.text.strip().upper()
+            else:
+                response = self.openai.chat.completions.create(
+                    model="gpt-4-turbo",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.1
+                )
+                result = response.choices[0].message.content.strip().upper()
             
             print(f"Convergence Check Result: {result}")
             
@@ -348,13 +368,18 @@ class DebateAgent:
             # RATE LIMITING: Standard pause
             time.sleep(2)
             
-            # Call OpenAI to synthesize consensus
-            response = self.openai.chat.completions.create(
-                model="gpt-4-turbo",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.5
-            )
-            text = response.choices[0].message.content
+            # Call LLM to synthesize consensus
+            text = ""
+            if self.optimist_provider == "google":
+                response = self.optimist_model.generate_content(prompt)
+                text = response.text
+            else:
+                response = self.openai.chat.completions.create(
+                    model="gpt-4-turbo",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.5
+                )
+                text = response.choices[0].message.content
             
             # Clean up markdown code blocks if present
             if '```json' in text:

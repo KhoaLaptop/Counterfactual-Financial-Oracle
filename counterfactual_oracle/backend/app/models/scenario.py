@@ -4,15 +4,15 @@ from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
-from app.core.database import Base
+from app.core.database import Base, GUID
 
 
 class Scenario(Base):
     """Scenario database model"""
     __tablename__ = "scenarios"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    report_id = Column(UUID(as_uuid=True), ForeignKey("reports.id", ondelete="CASCADE"), nullable=False)
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    report_id = Column(GUID(), ForeignKey("reports.id", ondelete="CASCADE"), nullable=False)
     name = Column(String(255), nullable=True)
     status = Column(String(20), default="PENDING")  # PENDING, RUNNING, COMPLETED, FAILED
     params = Column(JSON, nullable=False)  # ScenarioParams JSON

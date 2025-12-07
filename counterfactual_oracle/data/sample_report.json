@@ -1,59 +1,286 @@
 {
-  "income_statement": {
-    "Revenue": 1000000,
-    "CostOfGoodsSold": 600000,
-    "GrossProfit": 400000,
-    "OpEx": 200000,
-    "EBITDA": 200000,
-    "DepreciationAndAmortization": 50000,
-    "EBIT": 150000,
-    "InterestExpense": 20000,
-    "Taxes": 32500,
-    "NetIncome": 97500
+  "entity": {
+    "name": "Apple Inc.",
+    "ticker": "AAPL",
+    "exchange": "NASDAQ"
   },
-  "balance_sheet": {
-    "Assets": {
-      "Cash": 50000,
-      "AccountsReceivable": 100000,
-      "Inventory": 75000,
-      "PropertyPlantEquipment": 300000,
-      "TotalAssets": 525000
+  "reporting_context": {
+    "fiscal_year": 2024,
+    "fiscal_quarter": 1,
+    "period_type": "quarter",
+    "start_date": "2023-10-01",
+    "end_date": "2023-12-30"
+  },
+  "units": {
+    "currency": "USD",
+    "monetary_scale": "millions",
+    "shares_scale": "thousands"
+  },
+  "source": {
+    "type": "pdf_extract",
+    "file_name": "FY24_Q1_Consolidated_Financial_Statements.pdf",
+    "statements": [
+      "Condensed Consolidated Statements of Operations (Unaudited)",
+      "Condensed Consolidated Balance Sheets (Unaudited)",
+      "Condensed Consolidated Statements of Cash Flows (Unaudited)"
+    ]
+  },
+  "actuals": {
+    "income_statement": {
+      "2023-12-30": {
+        "net_sales_products": 96458,
+        "net_sales_services": 23117,
+        "net_sales_total": 119575,
+        "cost_of_sales_products": 58440,
+        "cost_of_sales_services": 6280,
+        "cost_of_sales_total": 64720,
+        "gross_margin": 54855,
+        "research_and_development": 7696,
+        "selling_general_and_administrative": 6786,
+        "operating_expenses_total": 14482,
+        "operating_income": 40373,
+        "other_income_expense_net": -50,
+        "income_before_income_taxes": 40323,
+        "provision_for_income_taxes": 6407,
+        "net_income": 33916,
+        "eps_basic": 2.19,
+        "eps_diluted": 2.18,
+        "shares_basic": 15509763,
+        "shares_diluted": 15576641
+      },
+      "2022-12-31": {
+        "net_sales_products": 96388,
+        "net_sales_services": 20766,
+        "net_sales_total": 117154,
+        "cost_of_sales_products": 60765,
+        "cost_of_sales_services": 6057,
+        "cost_of_sales_total": 66822,
+        "gross_margin": 50332,
+        "research_and_development": 7709,
+        "selling_general_and_administrative": 6607,
+        "operating_expenses_total": 14316,
+        "operating_income": 36016,
+        "other_income_expense_net": -393,
+        "income_before_income_taxes": 35623,
+        "provision_for_income_taxes": 5625,
+        "net_income": 29998,
+        "eps_basic": 1.89,
+        "eps_diluted": 1.88,
+        "shares_basic": 15892723,
+        "shares_diluted": 15955718
+      }
     },
-    "Liabilities": {
-      "AccountsPayable": 60000,
-      "ShortTermDebt": 20000,
-      "LongTermDebt": 150000,
-      "TotalLiabilities": 230000
+    "segment_sales": {
+      "2023-12-30": {
+        "americas": 50430,
+        "europe": 30397,
+        "greater_china": 20819,
+        "japan": 7767,
+        "rest_of_asia_pacific": 10162,
+        "total_segment_net_sales": 119575
+      },
+      "2022-12-31": {
+        "americas": 49278,
+        "europe": 27681,
+        "greater_china": 23905,
+        "japan": 6755,
+        "rest_of_asia_pacific": 9535,
+        "total_segment_net_sales": 117154
+      }
     },
-    "Equity": {
-      "RetainedEarnings": 195000,
-      "CommonStock": 100000,
-      "TotalEquity": 295000
+    "product_category_sales": {
+      "2023-12-30": {
+        "iphone": 69702,
+        "mac": 7780,
+        "ipad": 7023,
+        "wearables_home_and_accessories": 11953,
+        "services": 23117,
+        "total_category_net_sales": 119575
+      },
+      "2022-12-31": {
+        "iphone": 65775,
+        "mac": 7735,
+        "ipad": 9396,
+        "wearables_home_and_accessories": 13482,
+        "services": 20766,
+        "total_category_net_sales": 117154
+      }
+    },
+    "balance_sheet": {
+      "2023-12-30": {
+        "current_assets": {
+          "cash_and_cash_equivalents": 40760,
+          "marketable_securities": 32340,
+          "accounts_receivable_net": 23194,
+          "vendor_non_trade_receivables": 26908,
+          "inventories": 6511,
+          "other_current_assets": 13979,
+          "total_current_assets": 143692
+        },
+        "non_current_assets": {
+          "marketable_securities": 99475,
+          "property_plant_and_equipment_net": 43666,
+          "other_non_current_assets": 66681,
+          "total_non_current_assets": 209822
+        },
+        "total_assets": 353514,
+        "current_liabilities": {
+          "accounts_payable": 58146,
+          "other_current_liabilities": 54611,
+          "deferred_revenue": 8264,
+          "commercial_paper": 1998,
+          "term_debt_current": 10954,
+          "total_current_liabilities": 133973
+        },
+        "non_current_liabilities": {
+          "term_debt_non_current": 95088,
+          "other_non_current_liabilities": 50353,
+          "total_non_current_liabilities": 145441
+        },
+        "total_liabilities": 279414,
+        "shareholders_equity": {
+          "common_stock_and_additional_paid_in_capital": 75236,
+          "retained_earnings_or_accumulated_deficit": 8242,
+          "accumulated_other_comprehensive_loss": -9378,
+          "total_shareholders_equity": 74100
+        },
+        "total_liabilities_and_shareholders_equity": 353514
+      },
+      "2023-09-30": {
+        "current_assets": {
+          "cash_and_cash_equivalents": 29965,
+          "marketable_securities": 31590,
+          "accounts_receivable_net": 29508,
+          "vendor_non_trade_receivables": 31477,
+          "inventories": 6331,
+          "other_current_assets": 14695,
+          "total_current_assets": 143566
+        },
+        "non_current_assets": {
+          "marketable_securities": 100544,
+          "property_plant_and_equipment_net": 43715,
+          "other_non_current_assets": 64758,
+          "total_non_current_assets": 209017
+        },
+        "total_assets": 352583,
+        "current_liabilities": {
+          "accounts_payable": 62611,
+          "other_current_liabilities": 58829,
+          "deferred_revenue": 8061,
+          "commercial_paper": 5985,
+          "term_debt_current": 9822,
+          "total_current_liabilities": 145308
+        },
+        "non_current_liabilities": {
+          "term_debt_non_current": 95281,
+          "other_non_current_liabilities": 49848,
+          "total_non_current_liabilities": 145129
+        },
+        "total_liabilities": 290437,
+        "shareholders_equity": {
+          "common_stock_and_additional_paid_in_capital": 73812,
+          "retained_earnings_or_accumulated_deficit": -214,
+          "accumulated_other_comprehensive_loss": -11452,
+          "total_shareholders_equity": 62146
+        },
+        "total_liabilities_and_shareholders_equity": 352583
+      }
+    },
+    "cash_flow_statement": {
+      "2023-12-30": {
+        "cash_and_restricted_cash_beginning": 30737,
+        "operating_activities": {
+          "net_income": 33916,
+          "depreciation_and_amortization": 2848,
+          "share_based_compensation_expense": 2997,
+          "other_non_cash_items": -989,
+          "change_in_accounts_receivable_net": 6555,
+          "change_in_vendor_non_trade_receivables": 4569,
+          "change_in_inventories": -137,
+          "change_in_other_current_and_non_current_assets": -1457,
+          "change_in_accounts_payable": -4542,
+          "change_in_other_current_and_non_current_liabilities": -3865,
+          "net_cash_from_operating_activities": 39895
+        },
+        "investing_activities": {
+          "purchases_of_marketable_securities": -9780,
+          "proceeds_from_maturities_of_marketable_securities": 13046,
+          "proceeds_from_sales_of_marketable_securities": 1337,
+          "payments_for_acquisition_of_property_plant_and_equipment": -2392,
+          "other_investing": -284,
+          "net_cash_from_investing_activities": 1927
+        },
+        "financing_activities": {
+          "taxes_related_to_net_share_settlement_of_equity_awards": -2591,
+          "payments_for_dividends_and_dividend_equivalents": -3825,
+          "repurchases_of_common_stock": -20139,
+          "repayments_of_term_debt": 0,
+          "repayments_of_commercial_paper_net": -3984,
+          "other_financing": -46,
+          "net_cash_from_financing_activities": -30585
+        },
+        "net_change_in_cash_and_restricted_cash": 11237,
+        "cash_and_restricted_cash_ending": 41974,
+        "supplemental_cash_paid_for_income_taxes_net": 7255
+      },
+      "2022-12-31": {
+        "cash_and_restricted_cash_beginning": 24977,
+        "operating_activities": {
+          "net_income": 29998,
+          "depreciation_and_amortization": 2916,
+          "share_based_compensation_expense": 2905,
+          "other_non_cash_items": -317,
+          "change_in_accounts_receivable_net": 4275,
+          "change_in_vendor_non_trade_receivables": 2320,
+          "change_in_inventories": -1807,
+          "change_in_other_current_and_non_current_assets": -4099,
+          "change_in_accounts_payable": -6075,
+          "change_in_other_current_and_non_current_liabilities": 3889,
+          "net_cash_from_operating_activities": 34005
+        },
+        "investing_activities": {
+          "purchases_of_marketable_securities": -5153,
+          "proceeds_from_maturities_of_marketable_securities": 7127,
+          "proceeds_from_sales_of_marketable_securities": 509,
+          "payments_for_acquisition_of_property_plant_and_equipment": -3787,
+          "other_investing": -141,
+          "net_cash_from_investing_activities": -1445
+        },
+        "financing_activities": {
+          "taxes_related_to_net_share_settlement_of_equity_awards": -2316,
+          "payments_for_dividends_and_dividend_equivalents": -3768,
+          "repurchases_of_common_stock": -19475,
+          "repayments_of_term_debt": -1401,
+          "repayments_of_commercial_paper_net": -8214,
+          "other_financing": -389,
+          "net_cash_from_financing_activities": -35563
+        },
+        "net_change_in_cash_and_restricted_cash": -3003,
+        "cash_and_restricted_cash_ending": 21974,
+        "supplemental_cash_paid_for_income_taxes_net": 828
+      }
     }
   },
-  "cash_flow": {
-    "NetIncome": 97500,
-    "Depreciation": 50000,
-    "ChangeInWorkingCapital": -10000,
-    "CashFromOperations": 137500,
-    "CapEx": -40000,
-    "CashFromInvesting": -40000,
-    "DebtRepayment": -10000,
-    "Dividends": 0,
-    "CashFromFinancing": -10000,
-    "NetChangeInCash": 87500
-  },
-  "kpis": {
-    "RevenueGrowth": 0.10,
-    "EBITDAMargin": 0.20,
-    "TaxRate": 0.25
-  },
-  "notes": {
-    "OpEx": "Operating expenses include SG&A and R&D.",
-    "Debt": "Long-term debt interest rate is approx 5%."
-  },
-  "index": {
-    "Revenue": "Page 4, Table 1",
-    "OpEx": "Page 4, Table 1"
-  }
+  "counterfactual_scenarios": [
+    {
+      "scenario_id": "cf_example_services_plus_5pct",
+      "description": "Example counterfactual: increase FY24 Q1 services revenue by 5% holding all else constant.",
+      "base_period": "2023-12-30",
+      "base_statement": "income_statement",
+      "transformations": [
+        {
+          "target_path": "actuals.income_statement.2023-12-30.net_sales_services",
+          "operation": "multiply",
+          "value": 1.05
+        },
+        {
+          "target_path": "actuals.income_statement.2023-12-30.net_sales_total",
+          "operation": "recompute",
+          "expression": "net_sales_products + net_sales_services"
+        }
+      ],
+      "notes": "This block is just an example scaffold for your oracle; replace or extend as needed."
+    }
+  ]
 }
+

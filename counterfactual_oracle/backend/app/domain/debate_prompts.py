@@ -180,8 +180,8 @@ HISTORICAL REALITY (from PDF):
 
 SIMULATION PARAMETERS (The "Knobs"):
 - OpEx Delta: {params.opex_delta_bps} bps (Structural shift in efficiency)
-- Revenue Growth Delta: {params.revenue_growth_bps} bps (Shift in annual growth rate)
-- Discount Rate Delta: {params.discount_rate_bps} bps
+- Revenue Growth Delta: {params.revenue_growth_delta_bps} bps (Shift in annual growth rate)
+- Discount Rate Delta: {params.discount_rate_delta_bps} bps
 
 SIMULATION OUTPUT (5-Year Forecast):
 {forecast_str}
@@ -250,8 +250,8 @@ HISTORICAL REALITY (from PDF):
 
 SIMULATION PARAMETERS (The "Knobs"):
 - OpEx Delta: {params.opex_delta_bps} bps
-- Revenue Growth Delta: {params.revenue_growth_bps} bps
-- Discount Rate Delta: {params.discount_rate_bps} bps
+- Revenue Growth Delta: {params.revenue_growth_delta_bps} bps
+- Discount Rate Delta: {params.discount_rate_delta_bps} bps
 
 SIMULATION OUTPUT (5-Year Forecast):
 {forecast_str}

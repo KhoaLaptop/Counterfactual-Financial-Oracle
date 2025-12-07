@@ -146,8 +146,8 @@ class FinancialReport(BaseModel):
 
 class ScenarioParams(BaseModel):
     opex_delta_bps: float = 0.0
-    revenue_growth_bps: float = 0.0
-    discount_rate_bps: float = 0.0
+    revenue_growth_delta_bps: float = 0.0  # Fixed: was revenue_growth_bps
+    discount_rate_delta_bps: float = 0.0   # Fixed: was discount_rate_bps
     tax_rate_delta_bps: float = 0.0
 
 class SimulationResult(BaseModel):

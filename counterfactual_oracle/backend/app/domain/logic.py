@@ -74,10 +74,10 @@ def run_monte_carlo(base_report: FinancialReport, params: ScenarioParams, num_si
         raise ValueError(f"Base revenue must be positive, got {base_rev}")
     
     # Deltas (convert bps to decimal)
-    rev_growth_mean = params.revenue_growth_bps / 10000.0
+    rev_growth_mean = params.revenue_growth_delta_bps / 10000.0
     opex_delta_mean = params.opex_delta_bps / 10000.0
     discount_rate_base = 0.08 # Default 8% WACC
-    discount_rate_delta = params.discount_rate_bps / 10000.0
+    discount_rate_delta = params.discount_rate_delta_bps / 10000.0
     
     # Distributions
     rng = np.random.default_rng(42)
@@ -215,11 +215,9 @@ def run_monte_carlo(base_report: FinancialReport, params: ScenarioParams, num_si
         ebitda_forecast_p50=median_ebitda_forecast,
         fcf_forecast_p50=median_fcf_forecast,
         assumption_log=[
-            f"Causal Model: 5-Year Explicit Forecast + Terminal Value (g=2%)",
-            f"Revenue Driver: Base Growth (3%) + User Delta ({params.revenue_growth_bps} bps)",
-            f"OpEx Driver: Revenue Scaling + Efficiency Delta ({params.opex_delta_bps} bps)",
-            f"Discount Rate: {discount_rate_base + discount_rate_delta:.2%}",
-            f"Monte Carlo: {num_simulations} iterations"
+            f"OpEx was {'increased' if params.opex_delta_bps > 0 else 'decreased' if params.opex_delta_bps < 0 else 'held constant at'} {'by ' if params.opex_delta_bps != 0 else ''}{abs(params.opex_delta_bps)} bps ({abs(params.opex_delta_bps)/100:.1f}%) from the base OpEx value.",
+            f"Revenue Growth was {'increased' if params.revenue_growth_delta_bps > 0 else 'decreased' if params.revenue_growth_delta_bps < 0 else 'held constant at'} {'by ' if params.revenue_growth_delta_bps != 0 else ''}{abs(params.revenue_growth_delta_bps)} bps ({abs(params.revenue_growth_delta_bps)/100:.1f}%) from the base Revenue value.",
+            f"The Discount Rate was {'increased' if params.discount_rate_delta_bps > 0 else 'decreased' if params.discount_rate_delta_bps < 0 else 'held constant at'} {'by ' if params.discount_rate_delta_bps != 0 else ''}{abs(params.discount_rate_delta_bps)} bps ({abs(params.discount_rate_delta_bps)/100:.1f}%) from the base Discount Rate.",
         ],
         traceability={"Revenue": "Base * (1+g)^t", "OpEx": "Base * (1+g+delta)^t", "EBITDA": "Rev - COGS - OpEx"},
         simulation_runs=results[:100]

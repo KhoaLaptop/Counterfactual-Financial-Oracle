@@ -17,6 +17,7 @@ class ReportResponse(BaseModel):
     company_name: Optional[str]
     fiscal_year: Optional[int]
     pdf_metadata: Optional[Dict[str, Any]]
+    report_data: Optional[Dict[str, Any]]
     created_at: datetime
     updated_at: datetime
     

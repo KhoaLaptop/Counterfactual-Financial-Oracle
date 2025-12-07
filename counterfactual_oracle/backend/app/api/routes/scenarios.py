@@ -36,15 +36,15 @@ def execute_scenario_task(
         scenario.progress = 10
         db.commit()
         
-        # Reconstruct FinancialReport from JSON
-        financial_report = FinancialReport(**report_data)
-        scenario_params = ScenarioParams(**params)
-        
-        # Initialize services
-        simulation_service = SimulationService()
-        agents_service = AgentsService()
-        
         try:
+            # Reconstruct FinancialReport from JSON
+            financial_report = FinancialReport(**report_data)
+            scenario_params = ScenarioParams(**params)
+            
+            # Initialize services
+            simulation_service = SimulationService()
+            agents_service = AgentsService()
+
             # Step 1: Run Monte Carlo simulation
             scenario.progress = 30
             db.commit()
@@ -94,7 +94,8 @@ def execute_scenario_task(
             scenario.error_message = str(e)
             scenario.progress = 0
             db.commit()
-            raise
+            # Log the error
+            print(f"Error executing scenario {scenario_id}: {str(e)}")
         
     finally:
         db.close()
@@ -209,6 +210,34 @@ async def get_scenario_status(
         progress=scenario.progress,
         error_message=scenario.error_message
     )
+
+
+@router.get("/", response_model=list[ScenarioResponse])
+async def list_scenarios(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    """List all scenarios"""
+    scenarios = db.query(Scenario).order_by(Scenario.created_at.desc()).offset(skip).limit(limit).all()
+    return [
+        ScenarioResponse(
+            id=s.id,
+            report_id=s.report_id,
+            name=s.name,
+            status=s.status,
+            params=s.params,
+            simulation_results=s.simulation_results,
+            critic_verdict=s.critic_verdict,
+            debate_result=s.debate_result,
+            final_verdict=s.final_verdict,
+            error_message=s.error_message,
+            progress=s.progress,
+            created_at=s.created_at,
+            updated_at=s.updated_at
+        )
+        for s in scenarios
+    ]
 
 
 @router.post("/{scenario_id}/report")

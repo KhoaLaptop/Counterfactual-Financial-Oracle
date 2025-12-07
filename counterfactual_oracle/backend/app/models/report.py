@@ -3,14 +3,14 @@ from sqlalchemy import Column, String, Integer, JSON, DateTime
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
-from app.core.database import Base
+from app.core.database import Base, GUID
 
 
 class Report(Base):
     """Financial report database model"""
     __tablename__ = "reports"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
     company_name = Column(String(255), nullable=True)
     fiscal_year = Column(Integer, nullable=True)
     report_data = Column(JSON, nullable=False)  # Full FinancialReport JSON
