@@ -9,6 +9,8 @@
 
 The **Counterfactual Financial Oracle** is a sophisticated financial analysis platform that combines advanced AI agents, Monte Carlo simulation, and automated document extraction to analyze "what-if" scenarios in corporate finance. This system enables financial analysts to explore counterfactual scenarios by adjusting key parameters and observing their impact through AI-powered multi-agent debate and validation.
 
+[YouTube Tutorial](https://www.youtube.com/watch?v=Ng0Ev_X7WI4)
+
 ### Key Features
 
 ✨ **Multi-Agent AI Debate System**
