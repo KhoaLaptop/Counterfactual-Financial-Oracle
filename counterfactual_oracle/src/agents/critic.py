@@ -11,7 +11,7 @@ class CriticAgent:
             api_key=api_key,
             base_url="https://api.deepseek.com/v1"
         )
-        self.model = "deepseek-chat"
+        self.model = "DeepSeek-V3.2-Speciale"
 
     def critique(self, report: FinancialReport, simulation: AggregatedSimulation) -> CriticVerdict:
         """

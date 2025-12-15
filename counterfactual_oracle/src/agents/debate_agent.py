@@ -271,7 +271,7 @@ class DebateAgent:
         """Get DeepSeek's challenge"""
         prompt = get_deepseek_challenge_prompt(gemini_position, report, simulation, params)
         response = self.deepseek.chat.completions.create(
-            model="deepseek-chat",
+            model="DeepSeek-V3.2-Speciale",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7
         )
@@ -298,7 +298,7 @@ class DebateAgent:
         prompt = get_deepseek_counter_prompt(gemini_response, round_num, context, report, simulation, params)
         
         response = self.deepseek.chat.completions.create(
-            model="deepseek-chat",
+            model="DeepSeek-V3.2-Speciale",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7
         )
