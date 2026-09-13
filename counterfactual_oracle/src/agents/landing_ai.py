@@ -518,3 +518,6 @@ class LandingAIClient:
                 filename=raw_data.get('metadata', {}).get('filename')
             )
         )
+
+    # Alias with underscore prefix (expected by unit tests in test_ade_parsing.py)
+    _parse_landing_ai_response = parse_landing_ai_response

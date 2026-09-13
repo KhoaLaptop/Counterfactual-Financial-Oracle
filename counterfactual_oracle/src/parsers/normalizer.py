@@ -104,7 +104,8 @@ class FinancialNormalizer:
             'purchases related to property and equipment and intangible assets',
             'payments for acquisition of property, plant and equipment',
             'capital expenditures', 'purchases of property and equipment',
-            'purchase of property and equipment', 'acquisitions of property, plant and equipment'
+            'purchase of property and equipment', 'acquisitions of property, plant and equipment',
+            'payments for property and equipment',
         ],
         'dividends': [
             'dividends paid', 'payments for dividends'

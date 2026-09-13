@@ -67,7 +67,7 @@ class TestEndToEndFlow:
         assert report.balance_sheet.Assets['TotalAssets'] == 300000.0
         assert report.balance_sheet.Cash == 50000.0
         assert report.cash_flow.CashFromOperations == 40000.0
-        assert report.cash_flow.FreeCashFlow == 50000.0  # CFO - CapEx
+        assert report.cash_flow.FreeCashFlow == 30000.0  # CFO(40,000) - CapEx(10,000)
         
         # Step 3: Validate the report
         validator = ExtractionValidator()

@@ -54,9 +54,9 @@ def secure_filename(filename: str) -> str:
     
     # Ensure filename is not empty
     if not safe_name:
-        safe_name = "unnamed_file"
+        return "unnamed_file"
     
-    # Add random suffix to prevent overwrites
+    # Add random suffix to prevent overwrites (only for non-empty filenames)
     random_suffix = hashlib.md5(os.urandom(16)).hexdigest()[:8]
     name, ext = os.path.splitext(safe_name)
     safe_name = f"{name}_{random_suffix}{ext}"
@@ -191,7 +191,7 @@ def create_secure_temp_file(uploaded_file, suffix: str = ".pdf") -> Tuple[str, s
             size_bytes=os.path.getsize(temp_path)
         )
         
-        return temp_path, safe_filename
+        return Path(temp_path), safe_filename
         
     except Exception as e:
         # Clean up on error
