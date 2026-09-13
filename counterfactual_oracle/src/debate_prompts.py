@@ -7,7 +7,7 @@ between Gemini (Optimist) and DeepSeek (Skeptic).
 
 # Persona Definitions
 GEMINI_PERSONA = """You are the OPTIMIST FINANCIAL ANALYST (ADVANCED VERSION).
-Your purpose is not to be blindly bullish. Your purpose is to present the most analytically rigorous optimistic interpretation of the company’s financial statements and scenario results.
+Your purpose is not to be blindly bullish. Your purpose is to present the most analytically rigorous optimistic interpretation of the company's financial statements and scenario results.
 
 🎯 CORE OBJECTIVES
 1. Sound like a real buy-side or sell-side professional. Use concepts such as: operating leverage, margin expansion drivers, scale efficiencies, cash conversion improvement, capital allocation quality, pricing power, product mix shift, market share gains, competitive moat dynamics, discount-rate valuation sensitivity, long-term structural growth trends.
@@ -34,7 +34,7 @@ Your purpose is not to be blindly bullish. Your purpose is to present the most a
 - Pretending short-term weaknesses don't exist
 
 🧪 OPTIMIST RESPONSE TEMPLATE
-1. Address the Skeptic’s Concern Head-On (acknowledge context, explain why it's not structural).
+1. Address the Skeptic's Concern Head-On (acknowledge context, explain why it's not structural).
 2. Provide a Strong Data-Backed Bullish Argument (reference scenario numbers, growth, mix shift, efficiency).
 3. Discuss Long-Term Moat and Structural Drivers (competitive advantages).
 4. Explain Why the Valuation Can Still Be Justified (discount rate, terminal value, multi-cycle growth).
@@ -87,7 +87,6 @@ RULE 8: DEFINE ALLOWED vs. FORBIDDEN COMMENTS
   - Future cash-strategy dependencies
   - Multi-year projections beyond what's provided
   - Risk repricing without justification
-
 
 RULE 9: UNIT AWARENESS (THE "TRILLION" DOLLAR RULE)
 ✔ You MUST recognize that financial data is often in MILLIONS.
@@ -157,7 +156,6 @@ RULE 8: DEFINE ALLOWED vs. FORBIDDEN COMMENTS
   - Multi-year projections beyond what's provided
   - Risk repricing without justification
 
-
 RULE 9: UNIT AWARENESS (THE "TRILLION" DOLLAR RULE)
 ✔ You MUST recognize that financial data is often in MILLIONS.
 ✔ Example: If Revenue is 57,000 and the unit is "millions", the actual value is $57 BILLION.
@@ -171,7 +169,7 @@ RULE 10: STRESS TEST AWARENESS
 
 Keep responses concise (2-3 paragraphs max) and professional."""
 
-# Round-Specific Prompts
+
 def get_gemini_opening_prompt(report, simulation, params):
     """Generate opening statement for Gemini (Optimist)"""
     
@@ -239,6 +237,7 @@ Present your optimistic analysis of this COUNTERFACTUAL timeline.
 
 Example: "While near-term FCF shows modest growth, this is consistent with companies reinvesting ahead of a multi-year expansion cycle. As revenue scales from ${simulation.revenue_forecast_p50[0]:,.0f} to ${simulation.revenue_forecast_p50[-1]:,.0f}, fixed costs amortize, supporting operating leverage. The FCF growth to ${simulation.fcf_forecast_p50[-1]:,.0f} in Year 5 validates this trajectory."
 """
+
 
 def get_deepseek_challenge_prompt(gemini_position, report, simulation, params):
     """Generate DeepSeek's challenge to Gemini's opening"""
@@ -309,6 +308,7 @@ Challenge the optimistic view by focusing on the **risks** in this timeline.
 Example: "While revenue grows, the OpEx efficiency drag ({params.opex_delta_bps} bps) compounds. By Year 5, EBITDA is only ${simulation.ebitda_forecast_p50[-1]:,.0f}. More concerning, FCF grows from ${simulation.fcf_forecast_p50[0]:,.0f} to just ${simulation.fcf_forecast_p50[-1]:,.0f}, suggesting the business is capital-intensive and cash generation is weak."
 """
 
+
 def get_gemini_response_prompt(deepseek_challenge, round_num, debate_context, report=None, simulation=None, params=None):
     """Generate Gemini's response to DeepSeek's challenge"""
     
@@ -357,6 +357,7 @@ If this is Round 4 or later, and you feel the major points have been addressed:
 - **Do not nitpick**: If the core thesis holds, move towards a shared verdict.
 """
 
+
 def get_deepseek_counter_prompt(gemini_response, round_num, debate_context, report=None, simulation=None, params=None):
     """Generate DeepSeek's counter-argument"""
     
@@ -398,12 +399,13 @@ Continue to critique the counterfactual timeline using the data above.
 
 Press them on the *consequences* of the simulation data shown above.
 
-    ⚠️ **CONSENSUS PHASE (Round 4+):**
-    If this is Round 4 or later, and the optimist has conceded valid points:
-    - **Seek Convergence**: Acknowledge their concessions.
-    - **Find Common Ground**: Use language like "I agree with the assessment that..." or "We are aligned on...".
-    - **Do not nitpick**: If the core risks are acknowledged, move towards a shared verdict.
-    """
+⚠️ **CONSENSUS PHASE (Round 4+):**
+If this is Round 4 or later, and the optimist has conceded valid points:
+- **Seek Convergence**: Acknowledge their concessions.
+- **Find Common Ground**: Use language like "I agree with the assessment that..." or "We are aligned on...".
+- **Do not nitpick**: If the core risks are acknowledged, move towards a shared verdict.
+"""
+
 
 def get_consensus_prompt(debate_history, final_round=False):
     """Generate consensus-building prompt for both agents"""
@@ -435,54 +437,6 @@ Based on the debate so far:
 Are you reaching agreement on the key points? If yes, summarize your consensus. If no, state your remaining concerns concisely.
 """
 
-# Convergence Detection Prompt
-CONVERGENCE_ANALYSIS_PROMPT = """
-Analyze this financial debate between two analysts and determine if they have reached sufficient convergence.
-
-Debate transcript:
-{debate_transcript}
-
-Determine if convergence has been reached based on:
-1. Do both agree on NPV direction (positive vs negative)?
-2. Are their valuation estimates within 20% of each other?
-3. Have they stopped raising new objections?
-4. Are they using similar language ("likely", "probable", "confident")?
-
-Respond with ONLY:
-- "CONVERGED" if they have reached agreement
-- "DIVERGED" if they still have significant disagreements
-- "PARTIAL" if they agree on some but not all major points
-"""
-
-def get_consensus_prompt(debate_history, final_round=False):
-    """Generate consensus-building prompt for both agents"""
-    if final_round:
-        return f"""
-FINAL CONSENSUS ROUND
-
-Review the full debate:
-{debate_history}
-
-It's time to reach a conclusion. Please synthesize the debate into a structured JSON format.
-
-Return ONLY valid JSON with this structure:
-{{
-    "agreements": ["key point 1", "key point 2", "key point 3"],
-    "disagreements": ["remaining concern 1", "remaining concern 2"],
-    "verdict": "Buy" | "Cautious Buy" | "Hold" | "Cautious Sell" | "Sell",
-    "confidence": "High" | "Medium" | "Low",
-    "summary": "A concise 2-3 sentence summary of the final consensus."
-}}
-"""
-    else:
-        return f"""
-CONVERGENCE CHECK
-
-Based on the debate so far:
-{debate_history[-500:]}  # Last 500 chars
-
-Are you reaching agreement on the key points? If yes, summarize your consensus. If no, state your remaining concerns concisely.
-"""
 
 # Convergence Detection Prompt
 CONVERGENCE_ANALYSIS_PROMPT = """
