@@ -12,13 +12,12 @@ Tracks:
 - Phase transitions in system behavior
 """
 
-from typing import Dict, List, Any, Optional, Set, Tuple
-from dataclasses import dataclass, field
+from typing import Dict, List, Any, Optional, Set
+from dataclasses import dataclass
 from collections import defaultdict
 import numpy as np
 from datetime import datetime
 
-from .genome import AgentGenome
 from .population import AgentPopulation, AgentInstance
 from ..infrastructure.logging import get_logger
 

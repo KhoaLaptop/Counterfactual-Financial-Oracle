@@ -1,5 +1,4 @@
 import json
-import os
 import requests
 from typing import Dict, Any, Optional, List
 from app.domain.models import (
@@ -80,7 +79,7 @@ class LandingAIClient:
                     return None
                 val = float(cleaned)
                 return -val if is_negative else val
-            except:
+            except Exception:
                 return None
 
         # --- 1. Identify Sections and Tables by Position ---
@@ -141,15 +140,18 @@ class LandingAIClient:
             def handle_endtag(self, tag):
                 if tag == 'table':
                     self.in_table = False
-                    if self.current_table: self.tables.append(self.current_table)
+                    if self.current_table:
+                        self.tables.append(self.current_table)
                 elif tag == 'tr' and self.in_row:
                     self.in_row = False
-                    if self.current_row: self.current_table.append(self.current_row)
+                    if self.current_row:
+                        self.current_table.append(self.current_row)
                 elif tag == 'td' and self.in_cell:
                     self.in_cell = False
                     self.current_row.append(self.current_cell.strip())
             def handle_data(self, data):
-                if self.in_cell: self.current_cell += data
+                if self.in_cell:
+                    self.current_cell += data
 
         def parse_table_content(content, table_type):
             extracted_map = {}
@@ -165,8 +167,10 @@ class LandingAIClient:
                 for line in lines:
                     cells = [c.strip() for c in line.split('|')]
                     if len(cells) > 2:
-                        if cells[0] == '': cells.pop(0)
-                        if cells[-1] == '': cells.pop(-1)
+                        if cells[0] == '':
+                            cells.pop(0)
+                        if cells[-1] == '':
+                            cells.pop(-1)
                         rows.append(cells)
             
             # Convert rows to map
@@ -243,7 +247,7 @@ class LandingAIClient:
         annualization_multiplier = 4.0 if is_quarterly else 1.0
         
         if is_quarterly:
-            print(f"[ANNUALIZATION] Detected 'Three Months Ended' - applying 4x multiplier to Income Statement")
+            print("[ANNUALIZATION] Detected 'Three Months Ended' - applying 4x multiplier to Income Statement")
         
         # Helper to annualize income statement values
         def annualize(value: float) -> float:
@@ -430,13 +434,15 @@ class LandingAIClient:
             'Repurchases of common stock', 
             'Payments for dividends and dividend equivalents'
         ])
-        if share_repurchases: share_repurchases = abs(share_repurchases)
+        if share_repurchases:
+            share_repurchases = abs(share_repurchases)
         
         dividends = get_optional_value(cf_map, [
             'Dividends paid',
             'Payments for dividends'
         ])
-        if dividends: dividends = abs(dividends)
+        if dividends:
+            dividends = abs(dividends)
         
         # FIX 9: Better net change in cash extraction
         net_change_cash = get_value(cf_map, [

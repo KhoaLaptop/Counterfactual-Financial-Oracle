@@ -10,17 +10,17 @@ about evolution, resource allocation, and system architecture. It can:
 """
 
 import asyncio
-from typing import Dict, List, Any, Optional, Callable, Set
+import random
+from typing import Dict, List, Any, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime
 import numpy as np
 
-from .genome import AgentGenome, StrategyGene, PromptGene, PersonalityGene, GeneType
+from .genome import AgentGenome
 from .population import AgentPopulation, AgentInstance, PopulationConfig
-from .evolution_engine import EvolutionEngine, EvolutionPhase, FitnessLandscape
+from .evolution_engine import EvolutionEngine, FitnessLandscape
 from ..infrastructure.logging import get_logger
-from ..infrastructure.cache import cache
 
 logger = get_logger(__name__)
 
@@ -259,7 +259,6 @@ class MetaAgent:
         all_fitnesses = []
         
         for name, population in self.populations.items():
-            stats = population.get_species_stats()
             best = population.get_best_agent()
             
             assessment["populations"][name] = {

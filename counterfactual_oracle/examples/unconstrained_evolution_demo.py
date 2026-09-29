@@ -10,14 +10,16 @@ import json
 from datetime import datetime
 
 import sys
-sys.path.insert(0, '/Users/khoapc/Counterfactual Financial Oracle/counterfactual_oracle/src')
+from pathlib import Path
 
-from evolution import (
-    UnconstrainedEvolutionSystem,
+# Make the repo root importable so this script runs from any directory.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from counterfactual_oracle.src.evolution.unconstrained_system import (  # noqa: E402
     SystemConfiguration,
     run_unconstrained_evolution
 )
-from infrastructure.logging import configure_logging, get_logger
+from counterfactual_oracle.src.infrastructure.logging import configure_logging, get_logger  # noqa: E402
 
 # Configure logging
 configure_logging()

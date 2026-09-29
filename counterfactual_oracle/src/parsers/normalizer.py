@@ -4,8 +4,8 @@ Handles cleaning numbers, detecting formats, and annualizing data.
 """
 
 import re
-from typing import Optional, Dict, Any
-from decimal import Decimal, InvalidOperation
+from typing import Optional, Dict
+from decimal import InvalidOperation
 
 from ..infrastructure.logging import get_logger
 

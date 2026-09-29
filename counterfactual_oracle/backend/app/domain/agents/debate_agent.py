@@ -6,13 +6,12 @@ the final consensus from the debate transcript.
 """
 
 import time
-import re
 import json
-from typing import List, Tuple
+from typing import List
 import google.generativeai as genai
 from openai import OpenAI
 
-from app.domain.models import FinancialReport, AggregatedSimulation, DebateTurn, DebateResult
+from app.domain.models import FinancialReport, AggregatedSimulation, DebateTurn, DebateResult, ScenarioParams
 from app.domain.debate_prompts import (
     get_gemini_opening_prompt,
     get_deepseek_challenge_prompt,
@@ -189,7 +188,8 @@ class DebateAgent:
                     prompt += f"\n\n[SYSTEM FEEDBACK]: Your previous response was rejected. Issues: {validation['issues']}. \nFeedback: {validation['feedback']}\n\nPlease rewrite strictly adhering to the data."
             except Exception as e:
                 print(f"Gemini API Error: {e}")
-                if attempt == 2: raise e
+                if attempt == 2:
+                    raise e
                 time.sleep(2) # Short backoff on error
         
         return text # Return last attempt if all fail
@@ -232,7 +232,8 @@ class DebateAgent:
                     prompt += f"\n\n[SYSTEM FEEDBACK]: Your previous response was rejected. Issues: {validation['issues']}. \nFeedback: {validation['feedback']}\n\nPlease rewrite strictly adhering to the data."
             except Exception as e:
                 print(f"Gemini API Error: {e}")
-                if attempt == 2: raise e
+                if attempt == 2:
+                    raise e
                 time.sleep(2)
                 
         return text

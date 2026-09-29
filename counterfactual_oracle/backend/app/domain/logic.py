@@ -1,5 +1,5 @@
 import numpy as np
-from typing import List, Dict, Tuple, Any
+from typing import List, Dict, Any
 from app.domain.models import FinancialReport, ScenarioParams, SimulationResult, AggregatedSimulation, BalanceSheet
 
 def calculate_fcf(ebit: float, tax_rate: float, dep_amort: float, change_working_capital: float, capex: float) -> float:
@@ -166,7 +166,8 @@ def run_monte_carlo(base_report: FinancialReport, params: ScenarioParams, num_si
         g = 0.02  # 2% perpetual growth
         r = discount_rate_base + discount_rate_delta
         
-        if r <= g: r = g + 0.01
+        if r <= g:
+            r = g + 0.01
         
         terminal_fcf = fcf_stream[-1] * (1 + g)
         terminal_value = terminal_fcf / (r - g)

@@ -1,6 +1,5 @@
 """Initialize database tables"""
 from app.core.database import Base, engine
-from app.models import Report, Scenario
 
 def init_db():
     """Create all database tables"""

@@ -2,13 +2,13 @@
 Maps extracted financial data to FinancialReport models.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 from html.parser import HTMLParser
 import re
 
 from ..models import (
     FinancialReport, IncomeStatement, BalanceSheet, CashFlow,
-    SegmentData, GeographicData, PDFMetadata
+    PDFMetadata
 )
 from ..infrastructure.logging import get_logger
 from .normalizer import FinancialNormalizer

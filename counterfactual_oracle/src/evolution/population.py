@@ -6,8 +6,8 @@ and ecological niches. Implements various selection algorithms.
 """
 
 import random
-from typing import List, Dict, Optional, Tuple, Callable
-from dataclasses import dataclass, field
+from typing import Any, List, Dict, Optional, Callable
+from dataclasses import dataclass
 import numpy as np
 from collections import defaultdict
 

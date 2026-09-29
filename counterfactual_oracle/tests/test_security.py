@@ -6,12 +6,9 @@ import pytest
 import os
 from counterfactual_oracle.src.infrastructure.security import (
     secure_filename,
-    validate_file_type,
     validate_file_size,
-    create_secure_temp_file,
     sanitize_text,
-    FileValidationError,
-    PathTraversalError
+    FileValidationError
 )
 
 

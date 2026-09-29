@@ -2,7 +2,6 @@
 Telemetry and metrics collection using OpenTelemetry and Prometheus.
 """
 
-from typing import Optional
 from contextlib import contextmanager
 import time
 from prometheus_client import Counter, Histogram, Gauge, CollectorRegistry

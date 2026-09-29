@@ -201,7 +201,7 @@ class ResilientAPIClient:
             
             return result
             
-        except Exception as e:
+        except Exception:
             # Record failure
             self.circuit_breaker.record_failure()
             API_CALLS.labels(

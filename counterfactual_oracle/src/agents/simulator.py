@@ -1,6 +1,5 @@
 import google.generativeai as genai
 import json
-import os
 from ..models import FinancialReport, ScenarioParams, AggregatedSimulation
 from ..logic import run_monte_carlo
 

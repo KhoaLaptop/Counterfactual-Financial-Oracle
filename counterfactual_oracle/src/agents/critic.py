@@ -1,6 +1,5 @@
 from openai import OpenAI
 import json
-import os
 from ..models import FinancialReport, AggregatedSimulation, CriticVerdict
 from ..logic import check_balance_sheet
 
@@ -88,7 +87,7 @@ class CriticAgent:
             if simulation.median_npv < 0:
                 comparative_analysis.append("Negative NPV suggests the investment may not be viable")
             
-            comparative_analysis.append(f"Note: DeepSeek API unavailable - using rule-based analysis")
+            comparative_analysis.append("Note: DeepSeek API unavailable - using rule-based analysis")
             
             return CriticVerdict(
                 verdict="approve", # Default to approve if critic fails to avoid blocking

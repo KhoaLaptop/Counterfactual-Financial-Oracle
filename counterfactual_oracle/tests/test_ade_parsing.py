@@ -6,7 +6,6 @@ Tests the Landing AI parser with fixed JSON samples to ensure correct extraction
 
 import pytest
 from counterfactual_oracle.src.agents.landing_ai import LandingAIClient
-from counterfactual_oracle.src.models import FinancialReport
 
 # Sample ADE response (simplified)
 SAMPLE_ADE_RESPONSE = {

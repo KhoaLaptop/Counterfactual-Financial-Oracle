@@ -1,7 +1,6 @@
 """Report database model"""
 from sqlalchemy import Column, String, Integer, JSON, DateTime
 from sqlalchemy.sql import func
-from sqlalchemy.dialects.postgresql import UUID
 import uuid
 from app.core.database import Base, GUID
 

@@ -1,8 +1,6 @@
 """Report API routes"""
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, status, Form
-from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from typing import Union
 import json
 import uuid
 

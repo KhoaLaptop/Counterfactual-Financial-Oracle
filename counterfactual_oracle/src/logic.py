@@ -1,5 +1,5 @@
 import numpy as np
-from typing import List, Dict, Tuple, Any
+from typing import List, Dict, Any
 from .models import FinancialReport, ScenarioParams, SimulationResult, AggregatedSimulation, BalanceSheet
 
 def calculate_fcf(ebit: float, tax_rate: float, dep_amort: float, change_working_capital: float, capex: float) -> float:
@@ -166,7 +166,8 @@ def run_monte_carlo(base_report: FinancialReport, params: ScenarioParams, num_si
         g = 0.02  # 2% perpetual growth
         r = discount_rate_base + discount_rate_delta
         
-        if r <= g: r = g + 0.01
+        if r <= g:
+            r = g + 0.01
         
         terminal_fcf = fcf_stream[-1] * (1 + g)
         terminal_value = terminal_fcf / (r - g)
@@ -215,7 +216,7 @@ def run_monte_carlo(base_report: FinancialReport, params: ScenarioParams, num_si
         ebitda_forecast_p50=median_ebitda_forecast,
         fcf_forecast_p50=median_fcf_forecast,
         assumption_log=[
-            f"Causal Model: 5-Year Explicit Forecast + Terminal Value (g=2%)",
+            "Causal Model: 5-Year Explicit Forecast + Terminal Value (g=2%)",
             f"Revenue Driver: Base Growth (3%) + User Delta ({params.revenue_growth_bps} bps)",
             f"OpEx Driver: Revenue Scaling + Efficiency Delta ({params.opex_delta_bps} bps)",
             f"Discount Rate: {discount_rate_base + discount_rate_delta:.2%}",

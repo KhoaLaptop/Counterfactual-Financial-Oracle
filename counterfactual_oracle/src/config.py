@@ -3,10 +3,9 @@ Centralized configuration management for Counterfactual Financial Oracle.
 Uses pydantic-settings for environment-based configuration with validation.
 """
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 from typing import Optional
-import os
 
 
 class Settings(BaseSettings):
@@ -103,10 +102,12 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///counterfactual.db"
     database_echo: bool = False
     
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",  # .env may hold keys for other tools
+    )
 
 
 @lru_cache()

@@ -10,8 +10,7 @@ import requests
 from ..config import settings
 from ..infrastructure.logging import get_logger
 from ..infrastructure.retry import ResilientAPIClient, create_retry_config_for_provider
-from ..infrastructure.security import cleanup_temp_file
-from ..infrastructure.telemetry import EXTRACTION_TIME, EXTRACTION_PAGES
+from ..infrastructure.telemetry import EXTRACTION_PAGES
 
 logger = get_logger(__name__)
 

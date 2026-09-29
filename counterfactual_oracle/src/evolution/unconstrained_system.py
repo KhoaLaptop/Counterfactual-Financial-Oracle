@@ -13,14 +13,12 @@ This system has no fixed boundaries - it evolves its own evolution,
 creates new species, and discovers novel strategies autonomously.
 """
 
-import asyncio
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 import numpy as np
 
-from .genome import AgentGenome, AgentInstance
-from .population import AgentPopulation, PopulationConfig
-from .evolution_engine import EvolutionEngine, FitnessLandscape, EvolutionPhase
+from .population import AgentPopulation, AgentInstance
+from .evolution_engine import FitnessLandscape
 from .meta_agent import MetaAgent, EvolutionOrchestrator
 from .emergence import EmergenceDetector, SpecializationTracker
 from .recursive_improvement import SelfModificationLoop
@@ -176,7 +174,7 @@ class UnconstrainedEvolutionSystem:
             await engine._evaluate_population_async()
             
             # Advance
-            stats = engine.population.evolve_generation()
+            engine.population.evolve_generation()
             
             # Update engine state
             engine._update_evolution_state()
@@ -216,8 +214,6 @@ class UnconstrainedEvolutionSystem:
     
     async def _run_meta_orchestration(self) -> None:
         """Run meta-level orchestration."""
-        ecosystem_state = self.meta_agent._assess_ecosystem()
-        
         # Check for niche gaps and fill them
         await self.meta_agent._diversify_into_niches()
         
