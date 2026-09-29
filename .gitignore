@@ -50,3 +50,6 @@ Thumbs.db
 *.pdf
 output/
 reports/
+
+# graphify knowledge-graph output
+graphify-out/

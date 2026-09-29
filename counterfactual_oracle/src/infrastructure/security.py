@@ -193,7 +193,7 @@ def create_secure_temp_file(uploaded_file, suffix: str = ".pdf") -> Tuple[str, s
         
         return Path(temp_path), safe_filename
         
-    except Exception as e:
+    except Exception:
         # Clean up on error
         if os.path.exists(temp_path):
             os.remove(temp_path)

@@ -305,7 +305,6 @@ async def generate_pdf_report(
     
     # Save to temporary file and return
     import tempfile
-    import os
     
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
         tmp_file.write(pdf_bytes)

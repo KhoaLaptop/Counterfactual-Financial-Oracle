@@ -2,7 +2,7 @@
 Validation for extracted financial data.
 """
 
-from typing import List, Dict, Any
+from typing import List
 from dataclasses import dataclass
 from enum import Enum
 

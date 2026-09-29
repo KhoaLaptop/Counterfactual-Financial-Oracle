@@ -3,11 +3,9 @@ Integration tests for the refactored system.
 """
 
 import pytest
-from unittest.mock import Mock, patch
 
 from counterfactual_oracle.src.models import (
-    FinancialReport, IncomeStatement, BalanceSheet, CashFlow,
-    ScenarioParams, AggregatedSimulation, SimulationResult
+    ScenarioParams
 )
 from counterfactual_oracle.src.parsers.mapper import FinancialMapper
 from counterfactual_oracle.src.parsers.validator import ExtractionValidator
@@ -110,8 +108,7 @@ class TestSecurityIntegration:
         """Test secure file handling."""
         from counterfactual_oracle.src.infrastructure.security import (
             create_secure_temp_file,
-            cleanup_temp_file,
-            validate_file_size
+            cleanup_temp_file
         )
         
         # Create a mock uploaded file
@@ -198,9 +195,7 @@ class TestTelemetryIntegration:
         """Test that metrics are recorded."""
         from counterfactual_oracle.src.infrastructure.telemetry import (
             record_debate_metrics,
-            record_simulation_metrics,
-            DEBATE_ROUNDS,
-            SIMULATION_RESULTS
+            record_simulation_metrics
         )
         
         # Record some metrics

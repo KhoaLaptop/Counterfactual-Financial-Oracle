@@ -339,3 +339,13 @@ hr {
     color: var(--muted-foreground);
     font-family: 'JetBrains Mono', monospace;
 }
+
+/* Widget labels and radio options: Streamlit's default theme draws them dark,
+   which is unreadable on this stylesheet's dark background. */
+[data-testid="stWidgetLabel"],
+[data-testid="stWidgetLabel"] p,
+div[role="radiogroup"] label,
+div[role="radiogroup"] label p,
+[data-testid="stCaptionContainer"] {
+    color: var(--foreground) !important;
+}

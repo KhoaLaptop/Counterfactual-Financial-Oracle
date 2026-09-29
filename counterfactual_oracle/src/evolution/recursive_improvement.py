@@ -12,9 +12,9 @@ This is the highest level of the system - it evolves:
 """
 
 from typing import Dict, List, Any, Callable, Optional
+from collections import defaultdict
 from dataclasses import dataclass, field
 import numpy as np
-from datetime import datetime
 
 from ..infrastructure.logging import get_logger
 
@@ -387,7 +387,6 @@ themselves evolve.
     
     def _tournament_selection(self, population: List, params: Dict) -> Any:
         """Tournament selection."""
-        size = params.get("tournament_size", 3)
         # Implementation would go here
         return np.random.choice(population) if population else None
     

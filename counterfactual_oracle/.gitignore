@@ -48,3 +48,6 @@ Thumbs.db
 /tmp/
 
 
+
+# Downloaded filings for the extractor benchmark
+benchmark_pdfs/

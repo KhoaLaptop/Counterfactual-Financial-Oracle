@@ -12,13 +12,10 @@ import numpy as np
 
 try:
     import matplotlib.pyplot as plt
-    import matplotlib.patches as mpatches
-    from matplotlib.patches import FancyBboxPatch
     HAS_MATPLOTLIB = True
 except ImportError:
     HAS_MATPLOTLIB = False
 
-from .genome import AgentGenome
 from .population import AgentPopulation
 from ..infrastructure.logging import get_logger
 

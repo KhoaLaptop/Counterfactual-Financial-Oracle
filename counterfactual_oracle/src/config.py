@@ -3,10 +3,9 @@ Centralized configuration management for Counterfactual Financial Oracle.
 Uses pydantic-settings for environment-based configuration with validation.
 """
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 from typing import Optional
-import os
 
 
 class Settings(BaseSettings):
@@ -28,6 +27,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     deepseek_api_key: str = ""
     gemini_api_key: str = ""
+    mistral_api_key: str = ""
     
     # File Upload Security
     max_pdf_size_mb: int = 50
@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     # ==========================================
     # Document Extraction
     # ==========================================
+    document_extractor: str = "docling"  # docling (local, free), mistral, landing_ai
     landing_ai_timeout: int = 900
     landing_ai_base_url: str = "https://api.va.landing.ai/v1/ade"
     landing_ai_max_retries: int = 3
@@ -103,10 +104,12 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///counterfactual.db"
     database_echo: bool = False
     
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",  # .env may hold keys for other tools
+    )
 
 
 @lru_cache()
@@ -127,10 +130,12 @@ def validate_settings() -> list[str]:
     missing = []
     
     required_in_prod = [
-        "landingai_api_key",
         "openai_api_key",
         "deepseek_api_key",
     ]
+    extractor_keys = {"landing_ai": "landingai_api_key", "mistral": "mistral_api_key"}
+    if settings.document_extractor in extractor_keys:
+        required_in_prod.append(extractor_keys[settings.document_extractor])
     
     if settings.environment == "production":
         for key in required_in_prod:

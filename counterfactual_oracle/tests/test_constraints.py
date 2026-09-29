@@ -1,4 +1,3 @@
-import pytest
 from counterfactual_oracle.src.models import BalanceSheet
 from counterfactual_oracle.src.logic import check_balance_sheet
 

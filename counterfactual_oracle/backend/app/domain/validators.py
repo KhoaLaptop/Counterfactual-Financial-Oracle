@@ -5,8 +5,8 @@ This module provides validation and guardrails for financial calculations.
 Ensures inputs and outputs remain within physically possible bounds.
 """
 
-from typing import Dict, List, Tuple
-from app.domain.models import FinancialReport, IncomeStatement, BalanceSheet
+from typing import List, Tuple
+from app.domain.models import IncomeStatement, BalanceSheet
 
 class ValidationError:
     def __init__(self, severity: str, field: str, message: str, value: float = None):

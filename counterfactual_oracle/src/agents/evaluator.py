@@ -1,6 +1,7 @@
 from fpdf import FPDF
 from ..models import AggregatedSimulation, CriticVerdict, FinancialReport, DebateResult
 from typing import Optional
+from ..valuation.verdict import CONTEXT_NOTE
 
 class EvaluatorAgent:
     def __init__(self):
@@ -128,12 +129,12 @@ class EvaluatorAgent:
                 pdf.multi_cell(0, 5, txt=self._sanitize_text(message))
                 pdf.ln(2)
             
-            # Final verdict
+            # Debate confidence only: the agents' Buy/Hold/Sell call is deliberately not reported
             pdf.ln(3)
-            pdf.set_font("Arial", 'B', 14)
-            pdf.cell(200, 10, txt="Final Investment Verdict", ln=1)
             pdf.set_font("Arial", 'B', 12)
-            pdf.cell(200, 8, txt=f"{debate_result.final_verdict} (Confidence: {debate_result.confidence_level})", ln=1)
+            pdf.cell(200, 8, txt=f"Debate confidence: {debate_result.confidence_level}", ln=1)
+            pdf.set_font("Arial", 'I', 9)
+            pdf.multi_cell(0, 5, txt=self._sanitize_text(CONTEXT_NOTE))
             pdf.ln(3)
             
             # Key agreements

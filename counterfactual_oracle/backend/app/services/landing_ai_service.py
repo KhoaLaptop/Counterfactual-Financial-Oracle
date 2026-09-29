@@ -1,7 +1,6 @@
 """Service for Landing AI PDF extraction"""
 import tempfile
 import os
-from typing import Union
 from app.domain.models import FinancialReport
 from app.domain.agents.landing_ai import LandingAIClient
 from app.core.config import settings

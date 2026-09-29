@@ -5,7 +5,6 @@ This module contains synthetic companies with known/expected valuations
 to validate the accuracy of our DCF model.
 """
 
-import pytest
 from counterfactual_oracle.src.models import (
     FinancialReport, IncomeStatement, BalanceSheet, CashFlow, ScenarioParams
 )

@@ -7,7 +7,7 @@ Agents have genomes that can mutate, crossover, and evolve over generations.
 
 import random
 import hashlib
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 import numpy as np

@@ -1,7 +1,7 @@
 import google.generativeai as genai
 import time
 import json
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 from app.domain.models import FinancialReport, AggregatedSimulation
 
 class RealismValidatorAgent:

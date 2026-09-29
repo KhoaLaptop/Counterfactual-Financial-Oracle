@@ -1,0 +1,202 @@
+"""
+Single-company valuation context: the model's fair-value distribution next to the
+market price, the growth the price implies, and what moves the value.
+
+This is deliberately not a buy/sell call: in point-in-time backtests on S&P 500
+names (2016-2025) the model/price gap did not predict 1- or 3-year returns.
+"""
+
+from typing import Dict, List, Optional, Tuple
+
+import numpy as np
+
+from .assumptions import build_assumptions, growth_jump
+from dataclasses import replace
+
+from .dcf import ValuationAssumptions, implied_growth, simulate_fair_value
+from .models import Confidence, DebateReview, FairValue, Fundamentals, MarketSnapshot, PricePosition, Verdict
+
+CONTEXT_NOTE = (
+    "Valuation context, not a buy/sell signal. In point-in-time backtests on S&P 500 names "
+    "(2016-2025), the gap between this model's value and the market price did not predict "
+    "1- or 3-year returns (see counterfactual_oracle/research/ablations.md)."
+)
+SENSITIVITY_SIMULATIONS = 2000
+CONFIDENCE_LEVELS: List[Confidence] = ["Low", "Medium", "High"]
+MISSING_FIELDS_DOWNGRADE = 2
+TERMINAL_SHARE_DOWNGRADE = 0.75
+INVESTMENT_PHASE_CAPEX_TO_DA = 2.0
+HIGH_LEVERAGE = 3.0  # net debt / market value of equity
+
+
+def price_position(price: float, p10: float, p90: float) -> PricePosition:
+    """Where the market price sits against the model's P10-P90 range (descriptive only)."""
+    if price < p10:
+        return "PRICE_BELOW_MODEL_RANGE"
+    if price > p90:
+        return "PRICE_ABOVE_MODEL_RANGE"
+    return "PRICE_WITHIN_MODEL_RANGE"
+
+
+def _sensitivity(a: ValuationAssumptions, num_simulations: int, seed: int) -> Dict[str, float]:
+    """Median value per share with one assumption changed at a time."""
+    def shifted_margin(delta: float) -> Dict:
+        target = a.margin_target + delta if a.margin_target is not None else None
+        return {"ebit_margin": a.ebit_margin + delta, "margin_target": target}
+
+    scenarios = {
+        "base": {},
+        "wacc +1pt": {"wacc": a.wacc + 0.01},
+        "wacc -1pt": {"wacc": a.wacc - 0.01},
+        "growth +5pt": {"growth_start": a.growth_start + 0.05},
+        "growth -5pt": {"growth_start": a.growth_start - 0.05},
+        "margin +2pt": shifted_margin(0.02),
+        "margin -2pt": shifted_margin(-0.02),
+    }
+    n = min(num_simulations, SENSITIVITY_SIMULATIONS)
+    return {name: simulate_fair_value(replace(a, **change), n, seed).per_share_p50 for name, change in scenarios.items()}
+
+
+def _downgrade(level: Confidence) -> Confidence:
+    return CONFIDENCE_LEVELS[max(CONFIDENCE_LEVELS.index(level) - 1, 0)]
+
+
+def lower_confidence(a: Confidence, b: Confidence) -> Confidence:
+    return min(a, b, key=CONFIDENCE_LEVELS.index)
+
+
+def quantitative_confidence(
+    p10: float,
+    p90: float,
+    price: float,
+    missing_fields: List[str],
+    terminal_value_share: Optional[float] = None,
+    capex_to_da: Optional[float] = None,
+    leverage: Optional[float] = None,
+) -> Tuple[Confidence, List[str]]:
+    spread = (p90 - p10) / price
+    level: Confidence = "High" if spread < 0.5 else "Medium" if spread < 1.0 else "Low"
+    reasons = [f"P10-P90 fair-value spread is {spread:.0%} of price"]
+    if len(missing_fields) >= MISSING_FIELDS_DOWNGRADE:
+        level = _downgrade(level)
+        reasons.append(f"{len(missing_fields)} inputs missing: {', '.join(missing_fields)}")
+    if terminal_value_share is not None and terminal_value_share > TERMINAL_SHARE_DOWNGRADE:
+        level = _downgrade(level)
+        reasons.append(f"Terminal value is {terminal_value_share:.0%} of enterprise value")
+    if capex_to_da is not None and capex_to_da > INVESTMENT_PHASE_CAPEX_TO_DA:
+        level = _downgrade(level)
+        reasons.append(f"Investment phase: capex is {capex_to_da:.1f}x depreciation, assumed to fade by year 10")
+    if leverage is not None and leverage > HIGH_LEVERAGE:
+        level = _downgrade(level)
+        reasons.append(f"High leverage: net debt is {leverage:.1f}x the market value of equity")
+    return level, reasons
+
+
+# Rate-regulated electric, gas-distribution, water and combined utilities. Pipelines
+# (4922) and waste services (4953) are ordinary businesses and stay assessable.
+UTILITY_SIC = {4900, 4911, 4923, 4924, 4931, 4932, 4939, 4940, 4941, 4991}
+
+
+def _is_financial(sic: Optional[int]) -> bool:
+    # Banks, credit, brokers, insurers (6000-6411) and REITs (6798): FCF DCF doesn't apply.
+    return sic is not None and (6000 <= sic <= 6411 or sic == 6798)
+
+
+def _unfit_reason(f: Fundamentals, shares: Optional[float]) -> Optional[str]:
+    if _is_financial(f.sic):
+        return f"Financial company (SIC {f.sic}): free-cash-flow DCF does not apply"
+    if f.sic in UTILITY_SIC:
+        return f"Regulated utility (SIC {f.sic}): returns are set by regulators, free-cash-flow DCF does not apply"
+    note = f" ({f.data_note})" if f.data_note else ""
+    if f.revenue is None or f.revenue <= 0:
+        return "Revenue is missing or not positive" + note
+    if f.operating_income is None:
+        return "Operating income is missing" + note
+    if not shares:
+        return "Share count is missing"
+    base_fcf = f.operating_income + (f.depreciation_amortization or 0) - abs(f.capex or 0)
+    if f.operating_income <= 0 and base_fcf <= 0:
+        return "Operating income and free cash flow are negative"
+    return None
+
+
+def evaluate(
+    f: Fundamentals,
+    m: MarketSnapshot,
+    num_simulations: int = 10000,
+    seed: int = 42,
+    horizon_years: int = 10,
+    hold_years: int = 3,
+    margin_fade: bool = True,
+) -> Verdict:
+    shares = f.shares or m.shares_outstanding
+    header = dict(
+        ticker=f.ticker, company_name=f.name, price=m.price, period_end=f.period_end,
+        basis=f.basis, simulations=num_simulations, seed=seed, context_note=CONTEXT_NOTE,
+    )
+
+    reason = _unfit_reason(f, shares)
+    if reason:
+        return Verdict(price_position="NOT_ASSESSABLE", reason=reason, **header)
+
+    assumptions, missing = build_assumptions(
+        f, m, shares=shares, horizon_years=horizon_years, hold_years=hold_years, margin_fade=margin_fade,
+    )
+    dist = simulate_fair_value(assumptions, num_simulations=num_simulations, seed=seed)
+
+    gap = dist.per_share_p50 / m.price - 1
+    p_upside = float(np.mean(dist.per_share_samples > m.price))
+    confidence, reasons = quantitative_confidence(
+        dist.per_share_p10, dist.per_share_p90, m.price, missing, dist.terminal_value_share,
+        assumptions.capex_pct / assumptions.da_pct if assumptions.da_pct > 0 else None,
+        assumptions.net_debt / (m.price * assumptions.shares),
+    )
+    if growth_jump(f):
+        reasons.append("Recent revenue growth departs sharply from its 3-year trend (acquisition, one-off or "
+                       "a demand shift); using the lower rate")
+    if f.data_note:
+        reasons.append(f.data_note)
+
+    return Verdict(
+        price_position=price_position(m.price, dist.per_share_p10, dist.per_share_p90),
+        market_implied_growth=implied_growth(assumptions, m.price),
+        sensitivity=_sensitivity(assumptions, num_simulations, seed),
+        gap_pct=gap,
+        p_upside=p_upside,
+        fair_value=FairValue(
+            p10=dist.per_share_p10, p50=dist.per_share_p50, p90=dist.per_share_p90,
+            mean=float(np.mean(dist.per_share_samples)),
+        ),
+        confidence=confidence,
+        confidence_reasons=reasons,
+        assumptions={
+            "growth_start": assumptions.growth_start,
+            "ebit_margin": assumptions.ebit_margin,
+            "tax_rate": assumptions.tax_rate,
+            "wacc": assumptions.wacc,
+            "terminal_growth_low": assumptions.terminal_growth_low,
+            "terminal_growth_high": assumptions.terminal_growth_high,
+            "horizon_years": assumptions.years,
+            "hold_years": assumptions.hold_years,
+            "terminal_value_share": dist.terminal_value_share,
+            "capex_pct": assumptions.capex_pct,
+            "da_pct": assumptions.da_pct,
+            "net_debt": assumptions.net_debt,
+            "shares": assumptions.shares,
+        },
+        missing_fields=missing,
+        revenue_forecast_p50=dist.revenue_forecast_p50,
+        fcf_forecast_p50=dist.fcf_forecast_p50,
+        **header,
+    )
+
+
+def apply_debate(verdict: Verdict, review: DebateReview) -> Verdict:
+    """Attach a debate review. It may lower confidence, never raise it or change the numbers."""
+    if verdict.confidence is None:
+        return verdict.model_copy(update={"debate": review})
+    confidence = lower_confidence(verdict.confidence, review.confidence)
+    reasons = list(verdict.confidence_reasons)
+    if confidence != verdict.confidence:
+        reasons.append(f"Debate confidence was {review.confidence}")
+    return verdict.model_copy(update={"debate": review, "confidence": confidence, "confidence_reasons": reasons})

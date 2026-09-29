@@ -5,7 +5,7 @@ Refactored Debate Agent with async support, caching, and proper telemetry.
 import asyncio
 import time
 import json
-from typing import List, Optional
+from typing import List
 from concurrent.futures import ThreadPoolExecutor
 
 from openai import OpenAI, AsyncOpenAI
@@ -16,10 +16,10 @@ from ..config import settings
 from ..infrastructure.logging import get_logger
 from ..infrastructure.cache import cache
 from ..infrastructure.telemetry import (
-    record_debate_metrics, APICostTracker, tracer
+    record_debate_metrics, tracer
 )
 from ..infrastructure.retry import (
-    ResilientAPIClient, create_retry_config_for_provider, CircuitBreaker
+    ResilientAPIClient, CircuitBreaker
 )
 from .validator import RealismValidatorAgent
 from ..debate_prompts import (
