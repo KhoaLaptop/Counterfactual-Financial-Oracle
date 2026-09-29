@@ -47,12 +47,13 @@ class FieldSpec:
     tags: List[str]
     get: Callable[[FinancialReport], Optional[float]]
     compare_magnitude: bool = False  # sign conventions vary (e.g. CapEx)
+    any_tag: bool = False  # companies pick different tags for the same line; accept any
 
 
 FIELDS = [
-    FieldSpec("Revenue", "period", REVENUE_TAGS, lambda r: r.income_statement.Revenue),
+    FieldSpec("Revenue", "period", REVENUE_TAGS, lambda r: r.income_statement.Revenue, any_tag=True),
     FieldSpec("CostOfGoodsSold", "period", ["CostOfGoodsAndServicesSold", "CostOfRevenue", "CostOfGoodsSold"],
-              lambda r: r.income_statement.CostOfGoodsSold),
+              lambda r: r.income_statement.CostOfGoodsSold, any_tag=True),
     FieldSpec("GrossProfit", "period", ["GrossProfit"], lambda r: r.income_statement.GrossProfit),
     FieldSpec("EBIT", "period", OPERATING_INCOME_TAGS, lambda r: r.income_statement.EBIT),
     FieldSpec("NetIncome", "period", ["NetIncomeLoss", "ProfitLoss"], lambda r: r.income_statement.NetIncome),
@@ -126,6 +127,22 @@ def edgar_truth(facts: Dict, period_end: date, form: str) -> Dict[str, float]:
     return truth
 
 
+def truth_alternatives(facts: Dict, period_end: date, form: str) -> Dict[str, List[float]]:
+    """For `any_tag` fields, the value under each individual tag (all count as correct)."""
+    gaap = facts.get("facts", {}).get("us-gaap", {})
+    annual = form.upper().startswith("10-K")
+    alternatives = {}
+    for spec in FIELDS:
+        if spec.any_tag:
+            values = [
+                v for tag in spec.tags
+                if (v := _truth_value(merged_entries(gaap, [tag]), spec.kind, period_end, annual)) is not None
+            ]
+            if values:
+                alternatives[spec.name] = values
+    return alternatives
+
+
 # --- scoring ----------------------------------------------------------------------
 
 NUMBER = re.compile(r"(\()?-?\$?\s?(\d[\d,]*(?:\.\d+)?)(\))?")
@@ -155,7 +172,9 @@ def _estimated_cost(name: str, pages: int, metadata: Dict) -> Optional[float]:
     return None
 
 
-def score(raw: Dict, truth: Dict[str, float], form: str) -> ExtractorResult:
+def score(
+    raw: Dict, truth: Dict[str, float], form: str, alternatives: Optional[Dict[str, List[float]]] = None
+) -> ExtractorResult:
     markdown = raw.get("markdown", "")
     report = FinancialMapper().parse_raw_response(raw)
     # The mapper annualizes quarterly income statements (x4); undo it to compare with the filing.
@@ -170,9 +189,12 @@ def score(raw: Dict, truth: Dict[str, float], form: str) -> ExtractorResult:
                 value /= deannualize
             extracted[spec.name] = value
 
+    alternatives = alternatives or {}
+
     def correct(spec: FieldSpec, scale: float) -> bool:
         value = extracted.get(spec.name)
-        return bool(value) and _matches(value, truth[spec.name], scale, spec.compare_magnitude)
+        accepted = [truth[spec.name], *alternatives.get(spec.name, [])]
+        return bool(value) and any(_matches(value, t, scale, spec.compare_magnitude) for t in accepted)
 
     scored = [s for s in FIELDS if s.name in truth]
     best_scale = max(SCALES, key=lambda sc: sum(correct(s, sc) for s in scored))
@@ -195,7 +217,13 @@ def score(raw: Dict, truth: Dict[str, float], form: str) -> ExtractorResult:
     )
 
 
-def run_benchmark(pdf: str, extractors: Dict, truth: Dict[str, float], form: str) -> Dict[str, ExtractorResult]:
+def run_benchmark(
+    pdf: str,
+    extractors: Dict,
+    truth: Dict[str, float],
+    form: str,
+    alternatives: Optional[Dict[str, List[float]]] = None,
+) -> Dict[str, ExtractorResult]:
     results = {}
     for name, extractor in extractors.items():
         started = time.perf_counter()
@@ -204,7 +232,7 @@ def run_benchmark(pdf: str, extractors: Dict, truth: Dict[str, float], form: str
         except Exception as exc:  # one failing extractor must not stop the others
             results[name] = ExtractorResult(error=f"{type(exc).__name__}: {exc}", seconds=time.perf_counter() - started)
             continue
-        result = score(raw, truth, form)
+        result = score(raw, truth, form, alternatives)
         metadata = raw.get("metadata", {})
         result.seconds = time.perf_counter() - started
         result.pages = metadata.get("page_count", 0)
@@ -253,10 +281,11 @@ def run_manifest(
     for case in cases:
         form = case.get("form", "10-Q")
         try:
-            truth = edgar_truth(sec.company_facts(case["ticker"]), date.fromisoformat(case["period_end"]), form)
+            facts, period_end = sec.company_facts(case["ticker"]), date.fromisoformat(case["period_end"])
+            truth = edgar_truth(facts, period_end, form)
             if not truth:
                 raise LookupError(f"no XBRL values for period ending {case['period_end']} (SEC data may lag the filing)")
-            run = run_benchmark(case["pdf"], extractors, truth, form)
+            run = run_benchmark(case["pdf"], extractors, truth, form, truth_alternatives(facts, period_end, form))
         except Exception as exc:
             filing = {**case, "error": f"{type(exc).__name__}: {exc}"}
         else:

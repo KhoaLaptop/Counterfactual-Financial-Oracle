@@ -164,3 +164,99 @@ def test_total_liabilities_and_equity_row_is_not_equity():
 | Total shareholders' equity                  | 107,520 | 90,000  |
 """
     assert _report(markdown).balance_sheet.Equity["TotalEquity"] == 107_520
+
+
+# --- label variants seen on held-out filings (Pfizer, Caterpillar, JPMorgan, Exxon, Deckers) ---
+
+def test_revenue_prefers_total_row_and_handles_plurals_and_compound_labels():
+    pfizer_style = """
+|                    | Three Months Ended - September 28, 2025 | Three Months Ended - September 29, 2024 |
+|--------------------|--------|--------|
+| Product revenues   | $ 13,920 | $ 15,417 |
+| Alliance revenues  | 2,298  | 1,900  |
+| Total revenues     | 16,654 | 17,702 |
+| Cost of sales      | 4,000  | 3,900  |
+| Net income         | 3,500  | 4,470  |
+"""
+    caterpillar_style = pfizer_style.replace("Product revenues", "Sales of Machinery").replace(
+        "Total revenues", "Total sales and revenues")
+
+    assert _report(pfizer_style).income_statement.Revenue == _quarter(16_654)
+    assert _report(caterpillar_style).income_statement.Revenue == _quarter(16_654)
+
+
+def test_net_income_labelled_profit_with_footnote_marker():
+    markdown = """
+|                                       | Three Months Ended - March 31, 2025 | Three Months Ended - March 31, 2024 |
+|---------------------------------------|--------|--------|
+| Total sales and revenues              | 14,249 | 15,799 |
+| Cost of goods sold                    | 8,965  | 9,662  |
+| Gross profit                          | 5,284  | 6,137  |
+| Operating profit                      | 2,586  | 3,470  |
+| Profit of consolidated companies      | 1,996  | 2,844  |
+| Profit attributable to noncontrolling interests | (7) | (2) |
+| Profit 1                              | $ 2,003 | 2,856 |
+| Profit per common share               | $ 4.22 | 5.78   |
+"""
+    report = _report(markdown)
+
+    assert report.income_statement.NetIncome == _quarter(2_003)
+    assert report.income_statement.GrossProfit == _quarter(5_284)
+
+
+def test_cash_flow_labels_with_used_in_parentheticals():
+    pfizer = "| Net cash provided by/(used in) operating activities | 6,356 | 6,023 |"
+    jpmorgan = "| Net cash (used in)/provided by operating activities | (237,044) | 12,000 |"
+    caterpillar = "| Net cash provided by (used for) operating activities | 1,289 | 2,052 |"
+    jpmorgan_2026 = "| Net cash (used in) operating activities | (237,044) | (222,292) |"
+    cases = [(pfizer, 6_356), (jpmorgan, -237_044), (caterpillar, 1_289), (jpmorgan_2026, -237_044)]
+    for row, expected in cases:
+        markdown = f"""
+|                                                | Nine Months Ended - 2025 | Nine Months Ended - 2024 |
+|------------------------------------------------|--------|--------|
+| Net income                                     | 9,000  | 8,000  |
+| Depreciation and amortization                  | 1,000  | 900    |
+{row}
+| Purchases of property, plant and equipment     | (1,784) | (1,700) |
+"""
+        cash_flow = _report(markdown).cash_flow
+        assert cash_flow.CashFromOperations == expected
+        assert cash_flow.CapEx == 1_784
+
+
+def test_company_share_of_equity_is_preferred_over_total_equity():
+    exxon_style = """
+|                                    | Dec 31, 2025 | Dec 31, 2024 |
+|------------------------------------|---------|---------|
+| Cash and cash equivalents          | 10,000  | 23,000  |
+| Total assets                       | 448,980 | 453,000 |
+| Total liabilities                  | 182,354 | 180,000 |
+| ExxonMobil share of equity         | 259,386 | 263,705 |
+| Noncontrolling interests           | 7,240   | 7,000   |
+| Total equity                       | 266,626 | 270,705 |
+| Total liabilities and equity       | 448,980 | 453,000 |
+"""
+    assert _report(exxon_style).balance_sheet.Equity["TotalEquity"] == 259_386
+
+
+def test_balance_sheet_continuation_after_a_short_caption_is_merged():
+    deckers_style = """
+|                                   | June 30, 2026 | March 31, 2026 |
+|-----------------------------------|-------------|-------------|
+| Cash and cash equivalents         | $ 1,500,000 | $ 1,800,000 |
+| Total assets                      | $ 3,868,621 | $ 3,687,765 |
+| Trade accounts payable            | $ 700,000   | $ 500,000   |
+| Total current liabilities         | 1,060,000   | 900,000     |
+
+Stockholders' equity
+
+Common stock ($0.01 par value per share; 750,000 shares authorized;
+
+| 136,725 shares issued and outstanding) | June 30, 2026 1,367 | March 31, 2026 1,400 |
+|----------------------------------------|-----------|-----------|
+| Additional paid-in capital             | 298,049   | 287,700   |
+| Retained earnings                      | 2,034,898 | 2,246,000 |
+| Total stockholders' equity             | 2,301,682 | 2,499,638 |
+| Total liabilities and stockholders' equity | $ 3,868,621 | $ 3,687,765 |
+"""
+    assert _report(deckers_style).balance_sheet.Equity["TotalEquity"] == 2_301_682

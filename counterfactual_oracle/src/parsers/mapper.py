@@ -174,26 +174,29 @@ class FinancialMapper:
             if best is None or scored[best][3][section] < self.MIN_TABLE_SCORE:
                 continue
             chosen = [scored[best][2]]
-            nxt = best + 1
-            if nxt < len(scored):
-                _, _, cont_data, cont_scores = scored[nxt]
+            # Follow continuation tables (statements split across page breaks or captions).
+            prev = best
+            while prev + 1 < len(scored):
+                _, _, cont_data, cont_scores = scored[prev + 1]
                 is_continuation = (
                     cont_scores[section] >= 1
                     and cont_scores[section] == max(cont_scores.values())
-                    and not self._has_text_between(markdown_content, scored[best][1], scored[nxt][0])
+                    and not self._separated(markdown_content, scored[prev][1], scored[prev + 1][0], section, headings)
                 )
-                if is_continuation:
-                    chosen.append(cont_data)
+                if not is_continuation:
+                    break
+                chosen.append(cont_data)
+                prev += 1
             for data in chosen:
                 for key, value in data.items():
                     sections[section].setdefault(key, value)
         return sections
 
-    @staticmethod
-    def _has_text_between(markdown: str, end: int, start: int) -> bool:
-        """True when real prose (not just page-break markup) separates two tables."""
-        gap = re.sub(r"<!--.*?-->|\*|#+[^\n]*\(continued\)[^\n]*", "", markdown[end:start], flags=re.I | re.S)
-        return len(gap.strip()) > 80
+    def _separated(self, markdown: str, end: int, start: int, section: str, headings) -> bool:
+        """True when two tables are too far apart, or another statement's heading lies between them."""
+        gap = re.sub(r"<!--.*?-->", "", markdown[end:start], flags=re.S).strip()
+        other_heading = any(end <= pos < start and sec != section for pos, sec in headings)
+        return len(gap) > self.HEADING_WINDOW or other_heading
 
     def _find_tables(self, markdown_content: str):
         """All tables in document order as (start, end, {label: value})."""

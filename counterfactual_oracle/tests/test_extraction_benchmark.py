@@ -186,3 +186,24 @@ def test_run_manifest_flags_filings_without_xbrl_ground_truth():
 
     assert "no XBRL values" in filings[0]["error"]
     assert runs == []  # must not count as a 0% score
+
+
+def test_revenue_and_cogs_accept_any_standard_tag():
+    # Caterpillar tags a minor $27M item as CostOfGoodsAndServicesSold and its real
+    # cost of goods sold (8,965) as CostOfRevenue.
+    from counterfactual_oracle.src.parsers.benchmark import truth_alternatives
+
+    facts = _facts()
+    gaap = facts["facts"]["us-gaap"]
+    gaap["CostOfGoodsAndServicesSold"] = {"units": {"USD": [_e("2025-04-01", "2025-06-30", 27_000_000)]}}
+    gaap["CostOfRevenue"] = {"units": {"USD": [_e("2025-04-01", "2025-06-30", 64_720_000_000)]}}
+    period = date(2025, 6, 30)
+    truth = edgar_truth(facts, period, "10-Q")
+    alternatives = truth_alternatives(facts, period, "10-Q")
+    markdown = GOOD_MD.replace("| Operating income", "| Total cost of sales | 64,720 |\n| Operating income")
+
+    result = run_benchmark("f.pdf", {"x": FakeExtractor(markdown)}, truth, "10-Q", alternatives)["x"]
+
+    assert truth["CostOfGoodsSold"] == 27_000_000       # primary tag is the odd one
+    assert result.fields["CostOfGoodsSold"].correct       # but the real COGS is accepted
+    assert "TotalEquity" not in alternatives              # equity stays strict (parent only)
