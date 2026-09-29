@@ -9,14 +9,19 @@ from ..models import (
 )
 
 class LandingAIClient:
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, extractor=None):
+        """`extractor` (see parsers.extractors) replaces the built-in Landing AI call when given."""
         self.api_key = api_key
         self.base_url = "https://api.va.landing.ai/v1/ade"
+        self.extractor = extractor
 
     def extract_data(self, pdf_path: str) -> FinancialReport:
         """
-        Extracts data from a PDF using Landing AI ADE API.
+        Extracts data from a PDF using the injected extractor, or Landing AI ADE API.
         """
+        if self.extractor is not None:
+            return self.parse_landing_ai_response(self.extractor.extract(pdf_path))
+
         headers = {
             "Authorization": f"Bearer {self.api_key}",
         }

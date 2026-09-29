@@ -3,6 +3,7 @@ import os
 from dotenv import load_dotenv
 from src.models import ScenarioParams, FinancialReport
 from src.agents.landing_ai import LandingAIClient
+from src.parsers.extractors import create_extractor
 from src.agents.simulator import SimulatorAgent
 from src.agents.critic import CriticAgent
 from src.agents.evaluator import EvaluatorAgent
@@ -104,7 +105,11 @@ st.markdown("""
 
 # Main Area
 # Initialize Agents (moved here to be available for upload section)
-landing_client = LandingAIClient(api_key=os.getenv("LANDINGAI_API_KEY"))
+# PDF extractor: DOCUMENT_EXTRACTOR=docling (default, local), mistral, or landing_ai
+landing_client = LandingAIClient(
+    api_key=os.getenv("LANDINGAI_API_KEY"),
+    extractor=None if os.getenv("DOCUMENT_EXTRACTOR") == "landing_ai" else create_extractor(),
+)
 simulator = SimulatorAgent(api_key=os.getenv("GEMINI_API_KEY"))
 critic = CriticAgent(api_key=os.getenv("DEEPSEEK_API_KEY"))
 evaluator = EvaluatorAgent()

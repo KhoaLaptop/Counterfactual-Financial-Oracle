@@ -8,7 +8,7 @@ from typing import Dict, Any
 from ..models import FinancialReport
 from ..infrastructure.logging import get_logger
 from ..infrastructure.security import FileValidationError
-from ..parsers.extractor import DocumentExtractor
+from ..parsers.extractors import create_extractor
 from ..parsers.mapper import FinancialMapper
 from ..parsers.validator import ExtractionValidator
 
@@ -21,14 +21,15 @@ class LandingAIClient:
     Orchestrates extraction, mapping, and validation.
     """
     
-    def __init__(self, api_key: str = None):
+    def __init__(self, api_key: str = None, extractor=None):
         """
         Initialize the client.
         
         Args:
-            api_key: Landing AI API key (optional, will use settings if not provided)
+            api_key: Unused; kept for backward compatibility (keys come from settings)
+            extractor: PDF extractor; defaults to settings.document_extractor
         """
-        self.extractor = DocumentExtractor()
+        self.extractor = extractor or create_extractor()
         self.mapper = FinancialMapper()
         self.validator = ExtractionValidator()
     
