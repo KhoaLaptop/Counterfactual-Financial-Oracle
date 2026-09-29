@@ -25,15 +25,25 @@ class Extractor(Protocol):
     def extract(self, pdf_path: str) -> Dict[str, Any]: ...
 
 
+def _default_docling_converter():
+    from docling.document_converter import DocumentConverter  # heavy import, load on use
+
+    return DocumentConverter()
+
+
 class DoclingExtractor:
     """Runs IBM Docling locally: layout analysis + TableFormer table structure."""
 
-    def __init__(self, converter=None):
-        if converter is None:
-            from docling.document_converter import DocumentConverter  # heavy import, load on use
+    def __init__(self, converter=None, converter_factory: Optional[Callable[[], Any]] = None):
+        # Building Docling's converter takes seconds, so it happens on first use only.
+        self._converter = converter
+        self._converter_factory = converter_factory or _default_docling_converter
 
-            converter = DocumentConverter()
-        self.converter = converter
+    @property
+    def converter(self):
+        if self._converter is None:
+            self._converter = self._converter_factory()
+        return self._converter
 
     def extract(self, pdf_path: str) -> Dict[str, Any]:
         logger.info("docling_extraction_started", file_path=pdf_path)

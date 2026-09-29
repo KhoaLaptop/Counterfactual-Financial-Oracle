@@ -7,6 +7,12 @@ from src.parsers.extractors import create_extractor
 from src.agents.simulator import SimulatorAgent
 from src.agents.critic import CriticAgent
 from src.agents.evaluator import EvaluatorAgent
+from src.ui.valuation_view import debate_summary, render_screener, render_ticker_valuation
+from src.valuation.verdict import CONTEXT_NOTE
+
+TICKER_MODE = "🔎 Value a US ticker"
+SCREEN_MODE = "📊 Screen a watchlist"
+FILING_MODE = "📄 Analyze a filing"
 
 # Load env vars
 load_dotenv()
@@ -52,56 +58,71 @@ with st.sidebar:
     """, unsafe_allow_html=True)
     
     st.markdown("---")
-    
-    # Scenario Controls
-    st.markdown('<p class="metric-label">Scenario Controls</p>', unsafe_allow_html=True)
-    
-    with st.expander("ℹ️ How to use these controls"):
-        st.markdown("""
-        **Adjust these sliders to create "What-If" scenarios:**
-        
-        📉 **OpEx Delta**: Changes Operating Expenses.
-        - **Negative (-)**: Cost cutting (Higher Profit)
-        - **Positive (+)**: More spending (Lower Profit)
-        
-        📈 **Revenue Growth Delta**: Changes future sales.
-        - **Positive (+)**: Faster growth
-        - **Negative (-)**: Slower growth or decline
-        
-        💰 **Discount Rate Delta**: Adjusts valuation risk.
-        - **Higher (+)**: Future cash is worth less (Lower Valuation)
-        - **Lower (-)**: Future cash is worth more (Higher Valuation)
-        
-        *Note: 100 bps (basis points) = 1%*
-        """)
+    mode = st.radio("Mode", [TICKER_MODE, SCREEN_MODE, FILING_MODE], key="mode")
 
-    opex_delta = st.slider("OpEx Delta", -500, 500, 0, help="Basis points change in operating expenses")
-    st.markdown(f'<div style="text-align: right; margin-top: -1rem; margin-bottom: 0.5rem;"><span class="mono" style="color: var(--primary); font-size: 0.875rem;">{opex_delta:+d} bps</span></div>', unsafe_allow_html=True)
+    if mode == FILING_MODE:
+        st.markdown("---")
     
-    rev_growth_delta = st.slider("Revenue Growth Delta", -500, 500, 0, help="Basis points change in revenue growth")
-    st.markdown(f'<div style="text-align: right; margin-top: -1rem; margin-bottom: 0.5rem;"><span class="mono" style="color: var(--success); font-size: 0.875rem;">{rev_growth_delta:+d} bps</span></div>', unsafe_allow_html=True)
+        # Scenario Controls
+        st.markdown('<p class="metric-label">Scenario Controls</p>', unsafe_allow_html=True)
     
-    discount_rate_delta = st.slider("Discount Rate Delta", -500, 500, 0, help="Basis points change in discount rate")
-    st.markdown(f'<div style="text-align: right; margin-top: -1rem; margin-bottom: 0.5rem;"><span class="mono" style="color: var(--warning); font-size: 0.875rem;">{discount_rate_delta:+d} bps</span></div>', unsafe_allow_html=True)
+        with st.expander("ℹ️ How to use these controls"):
+            st.markdown("""
+            **Adjust these sliders to create "What-If" scenarios:**
+        
+            📉 **OpEx Delta**: Changes Operating Expenses.
+            - **Negative (-)**: Cost cutting (Higher Profit)
+            - **Positive (+)**: More spending (Lower Profit)
+        
+            📈 **Revenue Growth Delta**: Changes future sales.
+            - **Positive (+)**: Faster growth
+            - **Negative (-)**: Slower growth or decline
+        
+            💰 **Discount Rate Delta**: Adjusts valuation risk.
+            - **Higher (+)**: Future cash is worth less (Lower Valuation)
+            - **Lower (-)**: Future cash is worth more (Higher Valuation)
+        
+            *Note: 100 bps (basis points) = 1%*
+            """)
+
+        opex_delta = st.slider("OpEx Delta", -500, 500, 0, help="Basis points change in operating expenses")
+        st.markdown(f'<div style="text-align: right; margin-top: -1rem; margin-bottom: 0.5rem;"><span class="mono" style="color: var(--primary); font-size: 0.875rem;">{opex_delta:+d} bps</span></div>', unsafe_allow_html=True)
     
-    st.markdown("---")
+        rev_growth_delta = st.slider("Revenue Growth Delta", -500, 500, 0, help="Basis points change in revenue growth")
+        st.markdown(f'<div style="text-align: right; margin-top: -1rem; margin-bottom: 0.5rem;"><span class="mono" style="color: var(--success); font-size: 0.875rem;">{rev_growth_delta:+d} bps</span></div>', unsafe_allow_html=True)
     
-    # Action Buttons
-    run_btn = st.button("▶️ Run Analysis", use_container_width=True, type="primary")
+        discount_rate_delta = st.slider("Discount Rate Delta", -500, 500, 0, help="Basis points change in discount rate")
+        st.markdown(f'<div style="text-align: right; margin-top: -1rem; margin-bottom: 0.5rem;"><span class="mono" style="color: var(--warning); font-size: 0.875rem;">{discount_rate_delta:+d} bps</span></div>', unsafe_allow_html=True)
+    
+        st.markdown("---")
+    
+        # Action Buttons
+        run_btn = st.button("▶️ Run Analysis", use_container_width=True, type="primary")
+
+def render_footer():
+    st.markdown("""
+    <div class="footer">
+        <span>Counterfactual Financial Oracle • valuation context, not investment advice</span>
+    </div>
+    """, unsafe_allow_html=True)
+
 
 # Main Content
 st.markdown("""
 <div class="main-header">
-    <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.25rem;">
-        <h1>Analysis Dashboard</h1>
-        <div class="status-badge success">
-            <span style="font-size: 0.625rem;">●</span>
-            <span>LIVE</span>
-        </div>
-    </div>
-    <p>Real-time financial modeling • Scenario analysis • Risk assessment</p>
+    <h1>Counterfactual Financial Oracle</h1>
+    <p>Company valuation from SEC filings • Scenario analysis of uploaded filings</p>
 </div>
 """, unsafe_allow_html=True)
+
+if mode == TICKER_MODE:
+    render_ticker_valuation(st)
+    render_footer()
+    st.stop()
+if mode == SCREEN_MODE:
+    render_screener(st)
+    render_footer()
+    st.stop()
 
 # Main Area
 # Initialize Agents (moved here to be available for upload section)
@@ -119,7 +140,7 @@ st.markdown("## 📤 Upload Financial Document")
 st.markdown('<p style="font-size: 0.875rem; color: var(--muted-foreground); margin-bottom: 1.5rem;">Upload a PDF for AI extraction or a JSON file with pre-extracted data</p>', unsafe_allow_html=True)
 
 # Create tabs for different upload options
-upload_tab1, upload_tab2 = st.tabs(["📄 PDF Upload (Landing AI)", "📋 JSON Upload (Skip API)"])
+upload_tab1, upload_tab2 = st.tabs(["📄 PDF Upload", "📋 JSON Upload (skip extraction)"])
 
 report = None
 
@@ -136,26 +157,24 @@ with upload_tab1:
             f.write(uploaded_file.getbuffer())
         
         # 1. Extraction
-        with st.spinner("Extracting Data from PDF using Landing AI..."):
+        with st.spinner("Extracting data from PDF..."):
             try:
                 report = landing_client.extract_data(temp_pdf_path)
                 st.success("✅ Data extracted successfully!")
                 
                 # Display Extraction Metrics
                 if report.pdf_metadata:
-                    m_col1, m_col2, m_col3 = st.columns(3)
+                    m_col1, m_col2 = st.columns(2)
                     with m_col1:
-                        st.metric("Processing Time", f"{report.pdf_metadata.duration_ms/1000:.1f}s")
-                    with m_col2:
                         st.metric("Pages Processed", report.pdf_metadata.page_count)
-                    with m_col3:
-                        st.metric("Credits Used", f"{report.pdf_metadata.credit_usage:.1f}")
+                    with m_col2:
+                        st.metric("Extractor", os.getenv("DOCUMENT_EXTRACTOR", "docling"))
             except Exception as e:
                 st.error(f"Error extracting data: {str(e)}")
                 st.stop()
 
 with upload_tab2:
-    st.markdown("**Upload a pre-extracted JSON file** to skip Landing AI API call")
+    st.markdown("**Upload a pre-extracted JSON file** to skip PDF extraction")
     st.markdown('<p style="font-size: 0.75rem; color: var(--muted-foreground);">Use this if you already have extracted financial data in JSON format (or raw Landing AI response)</p>', unsafe_allow_html=True)
     
     uploaded_json = st.file_uploader("", type=["json"], key="json_uploader", label_visibility="collapsed")
@@ -894,14 +913,9 @@ if report is not None:
             st.markdown("### 🎯 Consensus Summary")
             st.markdown(debate.consensus_summary.replace('$', '\\$'))
         
-            # Final verdict
-            st.markdown(f"""
-            <div class="metric-card" style="text-align: center; margin-top: 1rem;">
-                <p class="metric-label">FINAL INVESTMENT VERDICT</p>
-                <p class="metric-value" style="font-size: 2rem;">{debate.final_verdict}</p>
-                <p class="metric-subtitle">Confidence: {debate.confidence_level}</p>
-            </div>
-            """, unsafe_allow_html=True)
+            # Debate confidence only: the agents' Buy/Hold/Sell call is not shown
+            st.metric("Debate confidence", debate_summary(debate)["confidence"])
+            st.info(CONTEXT_NOTE)
     
         # 4. Final Report
         st.markdown("## 📄 Report Generation")
@@ -936,7 +950,9 @@ else:
         <div style="max-width: 600px; margin: 0 auto; text-align: left;">
             <h3 style="font-size: 1rem; margin-bottom: 1rem;">Features:</h3>
             <ul style="color: var(--muted-foreground); line-height: 1.8;">
-                <li>🤖 AI-powered document extraction with Landing AI</li>
+                <li>🔎 Value any US-listed company from SEC filings (sidebar: Value a US ticker)</li>
+                <li>📊 Screen a watchlist by model value vs price</li>
+                <li>🤖 PDF extraction with local Docling (Mistral OCR or Landing AI optional)</li>
                 <li>📈 Monte Carlo simulation (10,000 scenarios)</li>
                 <li>🛡️ Adversarial critique with DeepSeek</li>
                 <li>📊 DCF valuation with Gordon Growth model</li>
@@ -946,21 +962,4 @@ else:
     </div>
     """, unsafe_allow_html=True)
 
-# Footer
-st.markdown("""
-<div class="footer">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div style="display: flex; gap: 1.5rem;">
-            <span>Last updated: 2024-11-19 14:34:22 UTC</span>
-            <span>•</span>
-            <span>Compute time: 2.847s</span>
-            <span>•</span>
-            <span style="display: flex; align-items: center; gap: 0.375rem;">
-                <span style="width: 6px; height: 6px; border-radius: 50%; background: var(--success);"></span>
-                All systems operational
-            </span>
-        </div>
-    </div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+render_footer()

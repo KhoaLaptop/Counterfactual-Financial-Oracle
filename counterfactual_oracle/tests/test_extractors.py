@@ -173,3 +173,20 @@ def test_refactored_client_uses_injected_extractor(pdf):
     client = LandingAIClient(extractor=extractor)
 
     assert client.extractor is extractor
+
+
+def test_docling_converter_is_built_on_first_extract_only(pdf):
+    # Building Docling's converter takes seconds; Streamlit reruns the app on every
+    # interaction, so it must not be built until a PDF is actually extracted.
+    built = []
+
+    def factory():
+        built.append(1)
+        return _FakeConverter()
+
+    extractor = DoclingExtractor(converter_factory=factory)
+    assert built == []
+
+    extractor.extract(str(pdf))
+    extractor.extract(str(pdf))
+    assert built == [1]

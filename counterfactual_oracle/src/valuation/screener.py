@@ -31,6 +31,7 @@ class RankedEntry(BaseModel):
     p_upside: float
     confidence: Confidence
     fair_value: FairValue
+    market_implied_growth: Optional[float] = None
     period_end: Optional[date] = None
     basis: Optional[str] = None
     debate: Optional[DebateReview] = None
@@ -112,7 +113,8 @@ def rank_universe(
         entries.append(RankedEntry(
             rank=rank, ticker=ticker, company_name=verdict.company_name, score=score, price_position=verdict.price_position,
             price=verdict.price, gap_pct=verdict.gap_pct, p_upside=verdict.p_upside,
-            confidence=verdict.confidence, fair_value=verdict.fair_value, period_end=verdict.period_end,
+            confidence=verdict.confidence, fair_value=verdict.fair_value,
+            market_implied_growth=verdict.market_implied_growth, period_end=verdict.period_end,
             basis=verdict.basis, debate=verdict.debate,
         ))
 
