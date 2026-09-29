@@ -244,3 +244,12 @@ def test_only_year_to_date_history_is_explained():
 
     assert f.revenue is None
     assert "no full fiscal year" in f.data_note
+
+
+def test_as_of_ignores_filings_made_later():
+    # Point-in-time view for backtests: on 2025-07-15 the Q2 2025 10-Q (filed 2025-08-01) was not public.
+    f = parse_company_facts(_facts(), ticker="EXM", as_of=date(2025, 7, 15))
+
+    assert f.period_end == date(2024, 12, 31)
+    assert f.basis == "FY"
+    assert f.revenue == pytest.approx(1000)

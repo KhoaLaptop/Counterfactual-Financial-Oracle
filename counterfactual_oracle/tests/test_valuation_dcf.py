@@ -109,3 +109,42 @@ def test_wacc_never_falls_to_terminal_growth():
 
     assert np.all(np.isfinite(result.per_share_samples))
     assert result.wacc_samples.min() >= 0.03 + 0.01 - 1e-12
+
+
+def test_capex_fades_to_maintenance_level():
+    # Peak build-out: capex 25% of revenue vs depreciation 5%.
+    result = simulate_fair_value(
+        _assumptions(capex_pct=0.25, capex_fade=True, growth_start=0.02), num_simulations=10, seed=1,
+    )
+    rev, fcf = np.array(result.revenue_forecast_p50), np.array(result.fcf_forecast_p50)
+    capex = 0.20 + 0.05 - fcf / rev  # FCF = rev * (margin*(1-tax) + da - capex), tax 0, no WC change
+
+    assert capex[:3] == pytest.approx([0.25, 0.25, 0.25])      # held while growth is held
+    assert capex[-1] == pytest.approx(0.05 * 1.02)              # maintenance: D&A x (1 + g)
+    assert np.all(np.diff(capex[2:]) < 0)                       # fades down in between
+
+
+def test_constant_capex_is_still_available():
+    result = simulate_fair_value(_assumptions(capex_pct=0.25), num_simulations=10, seed=1)
+    rev, fcf = np.array(result.revenue_forecast_p50), np.array(result.fcf_forecast_p50)
+    assert 0.20 + 0.05 - fcf / rev == pytest.approx(np.full(10, 0.25))
+    assert np.isfinite(result.terminal_value_share)  # EV is 0 here: no 0/0 NaN
+
+
+def test_per_share_value_is_floored_at_zero():
+    # Shareholders can lose at most their stake: equity value can't go below zero.
+    result = simulate_fair_value(_assumptions(net_debt=10_000.0), num_simulations=100, seed=1)
+
+    assert result.per_share_samples.min() == 0.0
+    assert result.per_share_p50 == 0.0
+
+
+def test_capex_below_depreciation_is_not_raised():
+    # Pfizer-style: D&A is inflated by amortization of acquired intangibles, not
+    # equipment that needs replacing, so the fade must never push capex up.
+    result = simulate_fair_value(
+        _assumptions(capex_pct=0.02, da_pct=0.08, capex_fade=True), num_simulations=10, seed=1,
+    )
+    rev, fcf = np.array(result.revenue_forecast_p50), np.array(result.fcf_forecast_p50)
+
+    assert 0.20 + 0.08 - fcf / rev == pytest.approx(np.full(10, 0.02))

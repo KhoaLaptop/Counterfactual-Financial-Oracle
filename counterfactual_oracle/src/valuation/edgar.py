@@ -10,6 +10,7 @@ the period end.
 import hashlib
 import json
 import os
+import threading
 import time
 from datetime import date, timedelta
 from pathlib import Path
@@ -176,9 +177,35 @@ def _shares(facts: Dict) -> Optional[float]:
     return float(max(entries, key=lambda e: (e["end"], e.get("filed", "")))["val"]) if entries else None
 
 
+def _filed_by(facts: Dict, as_of: date) -> Dict:
+    """Copy of companyfacts keeping only facts filed on or before `as_of` (point-in-time view)."""
+    cutoff = as_of.isoformat()
+    return {
+        **facts,
+        "facts": {
+            taxonomy: {
+                tag: {**concept, "units": {
+                    unit: [e for e in entries if e.get("filed", "") <= cutoff]
+                    for unit, entries in concept.get("units", {}).items()
+                }}
+                for tag, concept in concepts.items()
+            }
+            for taxonomy, concepts in facts.get("facts", {}).items()
+        },
+    }
+
+
 def parse_company_facts(
-    facts: Dict, ticker: str, sic: Optional[int] = None, cik: Optional[str] = None, name: str = ""
+    facts: Dict,
+    ticker: str,
+    sic: Optional[int] = None,
+    cik: Optional[str] = None,
+    name: str = "",
+    as_of: Optional[date] = None,
 ) -> Fundamentals:
+    """Annualized fundamentals; with `as_of`, only from filings public on that date."""
+    if as_of is not None:
+        facts = _filed_by(facts, as_of)
     gaap = facts.get("facts", {}).get("us-gaap", {})
     revenue_entries = merged_entries(gaap, REVENUE_TAGS)
     end = _latest_flow_end(revenue_entries)
@@ -247,13 +274,14 @@ class SecClient:
         """Raw XBRL companyfacts JSON for a ticker."""
         return self._fetch(FACTS_URL.format(cik=self.cik_for(ticker)))
 
-    def fundamentals(self, ticker: str) -> Fundamentals:
+    def fundamentals(self, ticker: str, as_of: Optional[date] = None) -> Fundamentals:
         cik = self.cik_for(ticker)
         submissions = self._fetch(SUBMISSIONS_URL.format(cik=cik))
         sic = submissions.get("sic")
         facts = self.company_facts(ticker)
         return parse_company_facts(
             facts, ticker=ticker, cik=cik, sic=int(sic) if sic else None, name=submissions.get("name", ""),
+            as_of=as_of,
         )
 
 
@@ -278,13 +306,15 @@ def _http_fetcher(
     session.headers.update({"User-Agent": user_agent, "Accept-Encoding": "gzip, deflate"})
     min_interval = 0.12  # SEC allows 10 requests/second
     last_call = [0.0]
+    throttle = threading.Lock()  # the ranker fetches from several threads
 
     def get_with_retries(url: str):
         for attempt in range(retries + 1):
-            wait = min_interval - (time.monotonic() - last_call[0])
-            if wait > 0:
-                sleep(wait)
-            last_call[0] = time.monotonic()
+            with throttle:
+                wait = min_interval - (time.monotonic() - last_call[0])
+                if wait > 0:
+                    sleep(wait)
+                last_call[0] = time.monotonic()
             try:
                 response = session.get(url, timeout=30)
             except (requests.ConnectionError, requests.Timeout):

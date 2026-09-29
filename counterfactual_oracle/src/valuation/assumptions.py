@@ -99,6 +99,7 @@ def build_assumptions(
         wc_pct=wc_pct,
         wacc=_wacc(f, m, shares, tax_rate),
         wacc_sigma=WACC_SIGMA,
+        capex_fade=True,
         net_debt=(f.total_debt or 0.0) - (f.cash or 0.0),
         shares=shares,
     )

@@ -190,3 +190,15 @@ def test_data_note_is_reported_on_assessable_verdicts():
 
     assert verdict.label != "NOT_ASSESSABLE"
     assert note in verdict.confidence_reasons
+
+
+def test_investment_phase_lowers_confidence():
+    level, reasons = quantitative_confidence(90, 130, price=100.0, missing_fields=[], capex_to_da=3.9)
+
+    assert level == "Medium"
+    assert any("investment phase" in r.lower() for r in reasons)
+
+
+def test_builder_fades_capex():
+    a, _ = build_assumptions(_fundamentals(capex=300.0), _market())
+    assert a.capex_fade

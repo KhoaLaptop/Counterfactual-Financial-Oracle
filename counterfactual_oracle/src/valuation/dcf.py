@@ -5,10 +5,12 @@ MODEL (per simulated path):
     g_t      = g0                                           for t <= hold_years
              = g0 + (gT - g0) * (t - hold) / (years - hold)  fading to terminal in the last year
     Rev_t    = Rev_{t-1} * (1 + g_t)
-    FCF_t    = Rev_t * (m * (1 - tax) + da - capex) - wc * (Rev_t - Rev_{t-1})
+    capex_t  = capex, or with capex_fade: held, then faded (same path as growth) down to
+               maintenance capex min(capex, da * (1 + gT)) by the last year
+    FCF_t    = Rev_t * (m * (1 - tax) + da - capex_t) - wc * (Rev_t - Rev_{t-1})
     TV       = FCF_T * (1 + gT) / (r - gT)
     EV       = sum(FCF_t / (1 + r)^t) + TV / (1 + r)^T
-    PerShare = (EV - net_debt) / shares
+    PerShare = max(0, (EV - net_debt) / shares)     equity can't be worth less than zero
 
 Sampled per path: g0 ~ N, m ~ N, r ~ N (floored at gT + 1pt), gT ~ U.
 """
@@ -42,6 +44,7 @@ class ValuationAssumptions:
     shares: float
     years: int = 10
     hold_years: int = 3
+    capex_fade: bool = False  # fade today's capex intensity to maintenance level
 
 
 @dataclass
@@ -55,6 +58,14 @@ class FairValueDistribution:
     per_share_p90: float
     revenue_forecast_p50: List[float]
     fcf_forecast_p50: List[float]
+
+
+def _terminal_share(pv_terminal: np.ndarray, enterprise_value: np.ndarray) -> float:
+    """Median PV(terminal)/EV over paths with positive EV; 1.0 if none (all value is terminal, if any)."""
+    positive = enterprise_value > 0
+    if not positive.any():
+        return 1.0
+    return float(np.median(pv_terminal[positive] / enterprise_value[positive]))
 
 
 def simulate_fair_value(
@@ -75,21 +86,26 @@ def simulate_fair_value(
 
     revenue = a.revenue * np.cumprod(1 + growth, axis=1)
     prev_revenue = np.hstack([np.full((n, 1), a.revenue), revenue[:, :-1]])
-    cash_margin = margin * (1 - a.tax_rate) + a.da_pct - a.capex_pct
-    fcf = revenue * cash_margin[:, None] - a.wc_pct * (revenue - prev_revenue)
+    capex = np.full((n, years), a.capex_pct)
+    if a.capex_fade:
+        # Only relax peak build-out; D&A can exceed real maintenance needs (acquired intangibles).
+        maintenance = np.minimum(a.da_pct * (1 + g_term), a.capex_pct)
+        capex = a.capex_pct + (maintenance - a.capex_pct)[:, None] * fade[None, :]
+    operating_cash = (margin * (1 - a.tax_rate) + a.da_pct)[:, None]
+    fcf = revenue * (operating_cash - capex) - a.wc_pct * (revenue - prev_revenue)
 
     discount = (1 + wacc)[:, None] ** np.arange(1, years + 1)[None, :]
     terminal_value = fcf[:, -1] * (1 + g_term) / (wacc - g_term)
     pv_terminal = terminal_value / discount[:, -1]
     enterprise_value = (fcf / discount).sum(axis=1) + pv_terminal
-    per_share = (enterprise_value - a.net_debt) / a.shares
+    per_share = np.maximum((enterprise_value - a.net_debt) / a.shares, 0.0)
 
     p10, p50, p90 = np.percentile(per_share, [10, 50, 90])
     return FairValueDistribution(
         per_share_samples=per_share,
         wacc_samples=wacc,
         enterprise_value_p50=float(np.median(enterprise_value)),
-        terminal_value_share=float(np.median(pv_terminal / enterprise_value)),
+        terminal_value_share=_terminal_share(pv_terminal, enterprise_value),
         per_share_p10=float(p10),
         per_share_p50=float(p50),
         per_share_p90=float(p90),

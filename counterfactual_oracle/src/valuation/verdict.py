@@ -16,6 +16,7 @@ P_UPSIDE_BEAR = 0.4
 CONFIDENCE_LEVELS: List[Confidence] = ["Low", "Medium", "High"]
 MISSING_FIELDS_DOWNGRADE = 2
 TERMINAL_SHARE_DOWNGRADE = 0.75
+INVESTMENT_PHASE_CAPEX_TO_DA = 2.0
 
 
 def classify(gap: float, p_upside: float) -> Label:
@@ -40,6 +41,7 @@ def quantitative_confidence(
     price: float,
     missing_fields: List[str],
     terminal_value_share: Optional[float] = None,
+    capex_to_da: Optional[float] = None,
 ) -> Tuple[Confidence, List[str]]:
     spread = (p90 - p10) / price
     level: Confidence = "High" if spread < 0.5 else "Medium" if spread < 1.0 else "Low"
@@ -50,6 +52,9 @@ def quantitative_confidence(
     if terminal_value_share is not None and terminal_value_share > TERMINAL_SHARE_DOWNGRADE:
         level = _downgrade(level)
         reasons.append(f"Terminal value is {terminal_value_share:.0%} of enterprise value")
+    if capex_to_da is not None and capex_to_da > INVESTMENT_PHASE_CAPEX_TO_DA:
+        level = _downgrade(level)
+        reasons.append(f"Investment phase: capex is {capex_to_da:.1f}x depreciation, assumed to fade by year 10")
     return level, reasons
 
 
@@ -97,6 +102,7 @@ def evaluate(
     p_upside = float(np.mean(dist.per_share_samples > m.price))
     confidence, reasons = quantitative_confidence(
         dist.per_share_p10, dist.per_share_p90, m.price, missing, dist.terminal_value_share,
+        assumptions.capex_pct / assumptions.da_pct if assumptions.da_pct > 0 else None,
     )
     if f.data_note:
         reasons.append(f.data_note)
@@ -121,6 +127,8 @@ def evaluate(
             "horizon_years": assumptions.years,
             "hold_years": assumptions.hold_years,
             "terminal_value_share": dist.terminal_value_share,
+            "capex_pct": assumptions.capex_pct,
+            "da_pct": assumptions.da_pct,
             "net_debt": assumptions.net_debt,
             "shares": assumptions.shares,
         },
