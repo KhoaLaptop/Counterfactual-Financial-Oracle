@@ -47,3 +47,38 @@ Known caveats that apply to every variant:
 - survivorship bias: the universe is today's index members
 - six comparisons: a train t of ~2 is weak evidence after multiple testing
 - V5 uses overlapping 3-year windows, so its t-statistic is overstated
+
+## Results (run 2026-09-29, after the rules above were committed in 0a66b13)
+
+Reproduce: run the four backtests (`--out abl_base.json`, `abl_h5.json` with
+`--horizon-years 5 --hold-years 1`, `abl_flat.json` with `--no-margin-fade`,
+`abl_w156.json` with `--horizon-weeks 156`), then
+`python -m counterfactual_oracle.research.run_ablations DIR`.
+
+Train (20 rebalances, 2016-03-31 to 2020-12-31):
+
+| ID | Rank corr. | t | Top − bottom | Hit rate | Quintiles (top → bottom score) |
+|----|-----------|---|--------------|----------|-------------------------------|
+| V0 baseline | −0.049 | −1.83 | −4.9% | 50% | 24.3 / 21.2 / 21.8 / 23.5 / 29.2% |
+| V1 raw gap | −0.066 | −2.55 | −6.3% | 35% | 21.8 / 22.7 / 22.9 / 24.4 / 28.2% |
+| V2 P(upside) | −0.065 | −2.45 | −7.0% | 35% | 22.1 / 22.5 / 22.5 / 23.9 / 29.1% |
+| V3 5-year horizon | −0.071 | −2.24 | −8.8% | 20% | 23.0 / 21.9 / 21.1 / 22.1 / 31.9% |
+| V4 no margin fade | −0.054 | −2.04 | −5.8% | 40% | 23.4 / 21.6 / 22.4 / 23.4 / 29.2% |
+| V5 3-year returns | +0.025 | +2.28 | +2.2% | 60% | 69.7 / 58.2 / 60.6 / 64.0 / 67.5% |
+
+Selected by the rule: **V5** (train t = +2.28, the only positive one, and its
+t is overstated by overlapping 3-year windows).
+
+Test (11 rebalances from 2021-03-31), evaluated once:
+
+| ID | Rank corr. | t | Top − bottom | Hit rate |
+|----|-----------|---|--------------|----------|
+| V5 | +0.013 | +0.54 | +13.6% | 55% |
+
+**Verdict: does not hold up out of sample.** Per the rule, tuning stops. The
+ranking is a valuation display, not a demonstrated return predictor.
+
+Not acted on (not pre-registered, would be data mining): every 1-year variant
+had a *negative* train correlation (t between −1.8 and −2.6), i.e. cheap-looking
+names underperformed in 2016–2020. That matches the well-known value drawdown
+of that period; flipping the signal to exploit it would be fitting to history.
