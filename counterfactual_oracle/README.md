@@ -128,13 +128,41 @@ VITE_API_URL=http://localhost:8000
 
 ## 🎯 Features
 
-- ✅ PDF extraction via Landing AI ADE
+- ✅ PDF extraction (local Docling by default; Mistral OCR or Landing AI optional)
 - ✅ Monte Carlo simulation (10,000 scenarios)
 - ✅ Multi-agent debate (OpenAI Optimist vs DeepSeek Skeptic)
 - ✅ Adversarial validation with hallucination prevention
 - ✅ Interactive charts and visualizations
 - ✅ PDF report generation
 - ✅ Real-time status polling
+
+## 📊 Valuation tools (`src/valuation`)
+
+Command-line tools that value US-listed companies from SEC EDGAR data and Yahoo prices.
+They need `SEC_USER_AGENT="Your Name you@example.com"` (SEC's required contact) and run
+from the repository root with the project virtualenv (`counterfactual_oracle/.venv`).
+
+```bash
+# One company: fair-value range, where the price sits, the growth the price implies
+python -m counterfactual_oracle.src.valuation NVDA
+
+# Many companies: sorted by model value relative to price
+python -m counterfactual_oracle.src.valuation.rank --universe sp500 --top 25
+
+# Point-in-time backtest of that ordering
+python -m counterfactual_oracle.src.valuation.backtest --universe sp500
+```
+
+**These outputs are valuation context, not buy/sell signals.** In point-in-time
+backtests on S&P 500 names (2016–2025), the gap between the model's value and the
+market price did not predict 1- or 3-year returns. The pre-registered tests and
+results are in [research/ablations.md](research/ablations.md).
+
+Banks, insurers, REITs, regulated utilities and loss-making companies are reported
+as `NOT_ASSESSABLE`, since a free-cash-flow DCF doesn't fit them.
+
+PDF extraction for uploaded filings defaults to local [Docling](https://github.com/docling-project/docling)
+(`DOCUMENT_EXTRACTOR=docling`); `mistral` and `landing_ai` are also available.
 
 ## 🧪 Testing
 
