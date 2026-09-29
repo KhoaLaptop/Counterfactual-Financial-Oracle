@@ -1,0 +1,152 @@
+"""
+Tests for parsing SEC EDGAR XBRL companyfacts into annualized fundamentals.
+"""
+
+from datetime import date
+
+import pytest
+
+from counterfactual_oracle.src.valuation.edgar import SecClient, flow_at, parse_company_facts
+
+
+def _e(start, end, val, filed="2025-08-01", form="10-Q"):
+    entry = {"end": end, "val": val, "filed": filed, "form": form, "accn": f"acc-{filed}"}
+    if start:
+        entry["start"] = start
+    return entry
+
+
+def _concept(*entries, unit="USD"):
+    return {"units": {unit: list(entries)}}
+
+
+def _facts():
+    """Calendar-year company, latest filing is the Q2 2025 10-Q."""
+    revenue_new = _concept(
+        _e("2023-01-01", "2023-12-31", 900, filed="2024-02-01", form="10-K"),
+        _e("2024-01-01", "2024-12-31", 1000, filed="2025-02-01", form="10-K"),
+        # 2024 re-reported in a later filing: latest filed wins
+        _e("2024-01-01", "2024-12-31", 1000, filed="2025-08-01", form="10-Q"),
+        _e("2023-01-01", "2023-06-30", 430, filed="2023-08-01"),
+        _e("2024-01-01", "2024-06-30", 480, filed="2024-08-01"),
+        _e("2025-01-01", "2025-06-30", 550, filed="2025-08-01"),
+        _e("2025-04-01", "2025-06-30", 290, filed="2025-08-01"),  # quarter-only noise
+    )
+    # Older years were tagged with a different revenue concept.
+    revenue_old = _concept(
+        _e("2021-01-01", "2021-12-31", 700, filed="2022-02-01", form="10-K"),
+        _e("2022-01-01", "2022-12-31", 800, filed="2023-02-01", form="10-K"),
+    )
+    op_income = _concept(
+        _e("2024-01-01", "2024-12-31", 200, form="10-K"),
+        _e("2024-01-01", "2024-06-30", 90),
+        _e("2025-01-01", "2025-06-30", 110),
+    )
+    capex = _concept(_e("2024-01-01", "2024-12-31", 60, form="10-K"))  # no YTD -> FY fallback
+    cash = _concept(
+        _e(None, "2024-12-31", 120, form="10-K"),
+        _e(None, "2025-06-30", 150),
+    )
+    debt = _concept(_e(None, "2025-06-30", 300))
+    shares = _concept(
+        _e(None, "2025-07-20", 60, filed="2025-08-01"),  # class A
+        _e(None, "2025-07-20", 40, filed="2025-08-01"),  # class B
+        _e(None, "2025-04-20", 99, filed="2025-05-01"),  # older cover page
+        unit="shares",
+    )
+    return {
+        "entityName": "Example Inc",
+        "facts": {
+            "us-gaap": {
+                "RevenueFromContractWithCustomerExcludingAssessedTax": revenue_new,
+                "Revenues": revenue_old,
+                "OperatingIncomeLoss": op_income,
+                "PaymentsToAcquirePropertyPlantAndEquipment": capex,
+                "CashAndCashEquivalentsAtCarryingValue": cash,
+                "LongTermDebt": debt,
+            },
+            "dei": {"EntityCommonStockSharesOutstanding": shares},
+        },
+    }
+
+
+def test_flow_at_stitches_trailing_twelve_months():
+    entries = _facts()["facts"]["us-gaap"]["RevenueFromContractWithCustomerExcludingAssessedTax"]["units"]["USD"]
+    assert flow_at(entries, date(2025, 6, 30)) == pytest.approx(1000 + 550 - 480)
+    assert flow_at(entries, date(2024, 12, 31)) == pytest.approx(1000)
+    assert flow_at(entries, date(2022, 3, 31)) is None
+
+
+def test_parse_company_facts_builds_ttm_fundamentals():
+    f = parse_company_facts(_facts(), ticker="EXM", sic=3571)
+
+    assert f.name == "Example Inc"
+    assert f.basis == "TTM"
+    assert f.period_end == date(2025, 6, 30)
+    assert f.revenue == pytest.approx(1070)
+    assert f.revenue_prior == pytest.approx(900 + 480 - 430)
+    assert f.operating_income == pytest.approx(200 + 110 - 90)
+
+
+def test_parse_merges_revenue_tags_and_falls_back_to_nearby_annual():
+    f = parse_company_facts(_facts(), ticker="EXM")
+    # 3y before 2025-06-30 has no TTM data; nearest fiscal year (2021, old tag) is used
+    assert f.revenue_3y_ago == pytest.approx(700)
+
+
+def test_parse_falls_back_to_latest_annual_for_flows_without_ytd():
+    f = parse_company_facts(_facts(), ticker="EXM")
+    assert f.capex == pytest.approx(60)
+
+
+def test_parse_balance_sheet_and_shares():
+    f = parse_company_facts(_facts(), ticker="EXM")
+
+    assert f.cash == pytest.approx(150)
+    assert f.total_debt == pytest.approx(300)
+    assert f.shares == pytest.approx(100)  # both share classes from the latest cover page
+    assert f.depreciation_amortization is None
+
+
+def test_parse_uses_fiscal_year_basis_when_no_quarter_after_it():
+    facts = _facts()
+    rev = facts["facts"]["us-gaap"]["RevenueFromContractWithCustomerExcludingAssessedTax"]["units"]["USD"]
+    rev[:] = [e for e in rev if e["form"] == "10-K" or e["end"] < "2025-01-01"]
+
+    f = parse_company_facts(facts, ticker="EXM")
+
+    assert f.basis == "FY"
+    assert f.period_end == date(2024, 12, 31)
+    assert f.revenue == pytest.approx(1000)
+
+
+class _FakeHttp:
+    def __init__(self):
+        self.urls = []
+
+    def __call__(self, url):
+        self.urls.append(url)
+        if url.endswith("company_tickers.json"):
+            return {"0": {"cik_str": 1234, "ticker": "EXM", "title": "Example Inc"}}
+        if "/submissions/" in url:
+            return {"name": "Example Inc", "sic": "3571"}
+        if "/companyfacts/" in url:
+            return _facts()
+        raise AssertionError(url)
+
+
+def test_sec_client_resolves_ticker_and_fetches_fundamentals():
+    http = _FakeHttp()
+    client = SecClient(fetch_json=http)
+
+    f = client.fundamentals("exm")
+
+    assert f.ticker == "EXM"
+    assert f.cik == "0000001234"
+    assert f.sic == 3571
+    assert any("CIK0000001234.json" in u for u in http.urls)
+
+
+def test_sec_client_unknown_ticker():
+    with pytest.raises(LookupError):
+        SecClient(fetch_json=_FakeHttp()).fundamentals("NOPE")
