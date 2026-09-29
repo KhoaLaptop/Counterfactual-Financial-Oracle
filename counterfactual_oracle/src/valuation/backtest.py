@@ -115,6 +115,7 @@ def run_backtest(
     seed: int = 42,
     horizon_weeks: int = 52,
     on_progress: Optional[Callable[[int, int, str], None]] = None,
+    model_options: Optional[Dict] = None,
 ) -> BacktestResult:
     """`history.fundamentals_at(ticker, as_of)` must only use data public on `as_of`."""
     last_price = prices.adjusted.index.max()
@@ -130,7 +131,7 @@ def run_backtest(
                     # SEC count can predate a split that already happened).
                     measured = min(f.shares_as_of or as_of, as_of)
                     f = f.model_copy(update={"shares": f.shares * prices.split_factor_after(ticker, measured)})
-                verdict = evaluate(f, prices.snapshot(ticker, as_of), num_simulations, seed)
+                verdict = evaluate(f, prices.snapshot(ticker, as_of), num_simulations, seed, **(model_options or {}))
             except Exception as exc:
                 result.errors.append((ticker, as_of.isoformat(), f"{type(exc).__name__}: {exc}"))
                 continue
@@ -148,11 +149,20 @@ def run_backtest(
     return result
 
 
-def summarize(result: BacktestResult, quantiles: int = 5) -> Dict:
-    """Per-date cross-sectional metrics, averaged over dates."""
+def summarize(
+    result: BacktestResult,
+    quantiles: int = 5,
+    score_field: str = "score",
+    start: Optional[date] = None,
+    end: Optional[date] = None,
+) -> Dict:
+    """Per-date cross-sectional metrics, averaged over dates in [start, end], ranking by `score_field`."""
     frame = pd.DataFrame([asdict(r) for r in result.rows])
+    if not frame.empty:
+        frame = frame[(frame.as_of >= (start or date.min)) & (frame.as_of <= (end or date.max))]
     if frame.empty:
-        return {"dates": 0}
+        return {"dates": 0, "score_field": score_field}
+    frame = frame.assign(score=frame[score_field])
 
     per_date = []
     for as_of, group in frame.groupby("as_of"):
@@ -180,6 +190,7 @@ def summarize(result: BacktestResult, quantiles: int = 5) -> Dict:
     spreads = np.array([d["top_minus_bottom"] for d in per_date])
     labels = sorted({label for d in per_date for label in d["label_excess"]})
     return {
+        "score_field": score_field,
         "dates": len(per_date),
         "names_per_date": float(np.mean([d["names"] for d in per_date])),
         "mean_rank_correlation": float(ics.mean()),
@@ -244,6 +255,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--horizon-weeks", type=int, default=52)
     parser.add_argument("--simulations", type=int, default=1000)
     parser.add_argument("--quantiles", type=int, default=5)
+    parser.add_argument("--horizon-years", type=int, default=10, help="Model forecast horizon")
+    parser.add_argument("--hold-years", type=int, default=3, help="Years growth is held before fading")
+    parser.add_argument("--no-margin-fade", action="store_true", help="Hold margins flat")
     parser.add_argument("--out", help="Write the full result (summary + rows) as JSON")
     args = parser.parse_args(argv)
 
@@ -260,6 +274,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         tickers, history, prices, quarter_ends(start, end), args.simulations,
         horizon_weeks=args.horizon_weeks,
         on_progress=lambda i, n, t: print(f"[{i}/{n}] {t}", file=sys.stderr),
+        model_options={"horizon_years": args.horizon_years, "hold_years": args.hold_years,
+                       "margin_fade": not args.no_margin_fade},
     )
     summary = summarize(result, args.quantiles)
     report = {k: v for k, v in summary.items() if k != "per_date"}

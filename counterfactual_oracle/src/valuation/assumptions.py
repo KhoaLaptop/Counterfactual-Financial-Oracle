@@ -90,7 +90,12 @@ def _wacc(f: Fundamentals, m: MarketSnapshot, shares: float, tax_rate: float) ->
 
 
 def build_assumptions(
-    f: Fundamentals, m: MarketSnapshot, shares: Optional[float] = None
+    f: Fundamentals,
+    m: MarketSnapshot,
+    shares: Optional[float] = None,
+    horizon_years: int = 10,
+    hold_years: int = 3,
+    margin_fade: bool = True,
 ) -> Tuple[ValuationAssumptions, List[str]]:
     """Return DCF assumptions plus the names of optional inputs that were missing."""
     shares = shares or f.shares or m.shares_outstanding
@@ -122,7 +127,9 @@ def build_assumptions(
         wacc=_wacc(f, m, shares, tax_rate),
         wacc_sigma=WACC_SIGMA,
         capex_fade=True,
-        margin_target=f.operating_margin_5y,
+        margin_target=f.operating_margin_5y if margin_fade else None,
+        years=horizon_years,
+        hold_years=hold_years,
         net_debt=(f.total_debt or 0.0) - (f.cash or 0.0),
         shares=shares,
     )

@@ -96,6 +96,9 @@ def evaluate(
     m: MarketSnapshot,
     num_simulations: int = 10000,
     seed: int = 42,
+    horizon_years: int = 10,
+    hold_years: int = 3,
+    margin_fade: bool = True,
 ) -> Verdict:
     shares = f.shares or m.shares_outstanding
     header = dict(
@@ -107,7 +110,9 @@ def evaluate(
     if reason:
         return Verdict(label="NOT_ASSESSABLE", reason=reason, **header)
 
-    assumptions, missing = build_assumptions(f, m, shares=shares)
+    assumptions, missing = build_assumptions(
+        f, m, shares=shares, horizon_years=horizon_years, hold_years=hold_years, margin_fade=margin_fade,
+    )
     dist = simulate_fair_value(assumptions, num_simulations=num_simulations, seed=seed)
 
     gap = dist.per_share_p50 / m.price - 1

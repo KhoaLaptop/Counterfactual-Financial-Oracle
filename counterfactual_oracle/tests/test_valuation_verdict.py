@@ -258,3 +258,12 @@ def test_cost_of_debt_has_a_credit_spread_and_wacc_a_floor():
 def test_margin_target_comes_from_history():
     a, _ = build_assumptions(_fundamentals(operating_margin_5y=0.12), _market())
     assert a.margin_target == pytest.approx(0.12)
+
+
+def test_model_options_for_horizon_and_margin_fade():
+    a, _ = build_assumptions(_fundamentals(operating_margin_5y=0.12), _market(),
+                             horizon_years=5, hold_years=1, margin_fade=False)
+    assert (a.years, a.hold_years, a.margin_target) == (5, 1, None)
+
+    verdict = evaluate(_fundamentals(), _market(), num_simulations=300, horizon_years=5, hold_years=1)
+    assert verdict.assumptions["horizon_years"] == 5

@@ -164,3 +164,24 @@ def test_split_adjustment_uses_when_shares_were_measured():
     stale, fresh = sorted(result.rows, key=lambda r: r.as_of)
 
     assert stale.gap_pct == pytest.approx(fresh.gap_pct, abs=0.05)
+
+
+# --- ablation support -------------------------------------------------------------
+
+def test_summarize_can_use_another_score_and_a_date_window():
+    dates = quarter_ends(date(2019, 3, 31), date(2022, 6, 30))
+    result = run_backtest(["CHEAP", "RICH"], FakeHistory(), _history(), dates, num_simulations=300)
+
+    train = summarize(result, quantiles=2, score_field="p_upside", end=date(2020, 12, 31))
+
+    assert train["dates"] == len([d for d in dates if d <= date(2020, 12, 31)])
+    assert train["score_field"] == "p_upside"
+
+
+def test_model_options_reach_the_valuation():
+    dates = [date(2020, 6, 30)]
+    ten = run_backtest(["CHEAP"], FakeHistory(), _history(), dates, num_simulations=300)
+    five = run_backtest(["CHEAP"], FakeHistory(), _history(), dates, num_simulations=300,
+                        model_options={"horizon_years": 5, "hold_years": 1})
+
+    assert ten.rows[0].gap_pct != pytest.approx(five.rows[0].gap_pct, abs=1e-3)
