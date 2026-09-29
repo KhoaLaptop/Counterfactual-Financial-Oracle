@@ -2,6 +2,7 @@
 Optional qualitative layer: run the existing optimist-vs-critic debate on a verdict.
 
 The debate never changes the numbers; `apply_debate` may only lower confidence.
+The legacy agents also produce a Buy/Hold/Sell verdict; it is deliberately dropped.
 """
 
 from typing import Protocol
@@ -89,7 +90,6 @@ def _confidence(level: str) -> Confidence:
 def to_review(result: DebateResult) -> DebateReview:
     return DebateReview(
         narrative=result.consensus_summary,
-        verdict=result.final_verdict,
         confidence=_confidence(result.confidence_level),
         agreements=result.key_agreements,
         disagreements=result.key_disagreements,

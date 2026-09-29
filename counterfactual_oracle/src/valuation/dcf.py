@@ -16,7 +16,7 @@ MODEL (per simulated path):
 Sampled per path: g0 ~ N, m ~ N, r ~ N (floored at gT + 1pt), gT ~ U.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import List, Optional
 
 import numpy as np
@@ -117,3 +117,29 @@ def simulate_fair_value(
         revenue_forecast_p50=np.median(revenue, axis=0).tolist(),
         fcf_forecast_p50=np.median(fcf, axis=0).tolist(),
     )
+
+
+def implied_growth(
+    a: ValuationAssumptions, price: float, low: float = -0.20, high: float = 0.60, tolerance: float = 1e-5
+) -> Optional[float]:
+    """
+    Reverse DCF: the starting revenue growth at which the (deterministic, central-case)
+    model value per share equals `price`. None if no rate in [low, high] gets there.
+    """
+    mid = (a.terminal_growth_low + a.terminal_growth_high) / 2
+    central = replace(a, growth_sigma=0.0, margin_sigma=0.0, wacc_sigma=0.0,
+                      terminal_growth_low=mid, terminal_growth_high=mid)
+
+    def gap(g: float) -> float:
+        return simulate_fair_value(replace(central, growth_start=g), num_simulations=1, seed=0).per_share_p50 - price
+
+    lo_gap, hi_gap = gap(low), gap(high)
+    if lo_gap > 0 or hi_gap < 0:
+        return None
+    while high - low > tolerance:
+        mid_g = (low + high) / 2
+        if gap(mid_g) < 0:
+            low = mid_g
+        else:
+            high = mid_g
+    return (low + high) / 2

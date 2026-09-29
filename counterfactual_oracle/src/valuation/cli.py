@@ -1,5 +1,5 @@
 """
-Command line: print a single-company verdict as JSON.
+Command line: print a single-company valuation (context, not a buy/sell call) as JSON.
 
     python -m counterfactual_oracle.src.valuation NVDA
     python -m counterfactual_oracle.src.valuation NVDA --debate

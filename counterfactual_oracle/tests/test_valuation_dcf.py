@@ -5,7 +5,7 @@ Tests for the per-share Monte Carlo DCF used by the single-company verdict.
 import numpy as np
 import pytest
 
-from counterfactual_oracle.src.valuation.dcf import ValuationAssumptions, simulate_fair_value
+from counterfactual_oracle.src.valuation.dcf import ValuationAssumptions, implied_growth, simulate_fair_value
 
 
 def _assumptions(**overrides):
@@ -158,3 +158,15 @@ def test_margin_fades_toward_target():
     assert margin[:3] == pytest.approx([0.40, 0.40, 0.40])
     assert margin[-1] == pytest.approx(0.25)
     assert np.all(np.diff(margin[2:]) < 0)
+
+
+def test_implied_growth_inverts_the_dcf():
+    # Reverse DCF: the starting growth at which the model value equals the price.
+    a = _assumptions(terminal_growth_low=0.02, terminal_growth_high=0.02)
+    price = simulate_fair_value(_assumptions(growth_start=0.12), num_simulations=1, seed=0).per_share_p50
+
+    assert implied_growth(a, price) == pytest.approx(0.12, abs=1e-3)
+
+
+def test_implied_growth_is_none_when_out_of_range():
+    assert implied_growth(_assumptions(), price=1e9) is None

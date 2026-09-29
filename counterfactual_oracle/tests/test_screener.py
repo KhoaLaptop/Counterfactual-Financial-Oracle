@@ -48,7 +48,7 @@ class CountingReviewer:
 
     def review(self, fundamentals, verdict):
         self.tickers.append(fundamentals.ticker)
-        return DebateReview(narrative="Reviewed.", verdict="Hold", confidence="Low")
+        return DebateReview(narrative="Reviewed.", confidence="Low")
 
 
 # --- universes ------------------------------------------------------------------
@@ -91,7 +91,7 @@ def test_parse_sp500_html_extracts_constituents_table():
 
 def test_risk_adjusted_gap():
     class V:
-        label, price, gap_pct = "UNDERVALUED", 100.0, 0.30
+        price_position, price, gap_pct = "PRICE_BELOW_MODEL_RANGE", 100.0, 0.30
 
         class fair_value:
             p10, p90 = 80.0, 180.0
@@ -160,9 +160,19 @@ def test_rank_cli_watchlist_prints_ranked_json(tmp_path, capsys):
 
 def test_zero_fair_value_ranks_last_instead_of_being_excluded():
     class V:
-        label, price, gap_pct = "OVERVALUED", 50.0, -1.0
+        price_position, price, gap_pct = "PRICE_ABOVE_MODEL_RANGE", 50.0, -1.0
 
         class fair_value:
             p10 = p90 = 0.0
 
     assert risk_adjusted_gap(V) == pytest.approx(-1.0 / 0.05)
+
+
+
+def test_ranked_entries_report_price_position_not_a_label():
+    ranking = rank_universe(["CHEAP"], Oracle(FakeSec(), FakeMarket()), num_simulations=500)
+    entry = ranking.entries[0].model_dump()
+
+    assert entry["price_position"] == "PRICE_BELOW_MODEL_RANGE"
+    assert "label" not in entry
+    assert "not a buy/sell signal" in ranking.context_note

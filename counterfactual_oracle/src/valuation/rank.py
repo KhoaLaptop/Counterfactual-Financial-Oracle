@@ -1,5 +1,8 @@
 """
-Command line: rank a universe of stocks by risk-adjusted valuation gap (JSON).
+Command line: sort a universe of stocks by model value relative to price (JSON).
+
+Valuation context, not a return forecast: backtests found this ordering did not
+predict 1- or 3-year returns (counterfactual_oracle/research/ablations.md).
 
     python -m counterfactual_oracle.src.valuation.rank --watchlist my.txt
     python -m counterfactual_oracle.src.valuation.rank --universe sp500 --top 25 --debate-top 5
@@ -18,7 +21,7 @@ from .universe import load_sp500, load_watchlist
 
 
 def main(argv: Optional[List[str]] = None, oracle: Optional[Oracle] = None) -> int:
-    parser = argparse.ArgumentParser(prog="oracle-rank", description="Rank stocks by risk-adjusted valuation gap.")
+    parser = argparse.ArgumentParser(prog="oracle-rank", description="Sort stocks by model value vs price (valuation context, not a return forecast).")
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--universe", choices=["sp500"], help="Built-in universe (dated snapshot in data/universe)")
     source.add_argument("--watchlist", help="File with one ticker per line")

@@ -49,14 +49,14 @@ class FakeReviewer:
 
     def review(self, fundamentals, verdict):
         self.calls += 1
-        return DebateReview(narrative="Critic flagged margin risk.", verdict="Hold", confidence=self.confidence)
+        return DebateReview(narrative="Critic flagged margin risk.", confidence=self.confidence)
 
 
 def test_oracle_judges_ticker_without_debate():
     verdict = Oracle(FakeSec(), FakeMarket()).judge("test", num_simulations=2000)
 
     assert verdict.ticker == "TEST"
-    assert verdict.label != "NOT_ASSESSABLE"
+    assert verdict.price_position != "NOT_ASSESSABLE"
     assert verdict.debate is None
 
 
@@ -70,7 +70,7 @@ def test_debate_can_only_lower_confidence():
     assert raised.confidence == base.confidence
     # numbers are untouched by the debate
     assert lowered.fair_value == base.fair_value
-    assert lowered.label == base.label
+    assert lowered.price_position == base.price_position
 
 
 def test_debate_skipped_for_not_assessable():
@@ -79,7 +79,7 @@ def test_debate_skipped_for_not_assessable():
 
     verdict = Oracle(FakeSec(bank), FakeMarket(), reviewer=reviewer).judge("bank", num_simulations=100)
 
-    assert verdict.label == "NOT_ASSESSABLE"
+    assert verdict.price_position == "NOT_ASSESSABLE"
     assert reviewer.calls == 0
 
 
@@ -100,7 +100,7 @@ def test_debate_adapter_feeds_existing_agent_and_maps_result():
     assert report.income_statement.EBIT == 200.0
     assert simulation.median_npv == pytest.approx(verdict.fair_value.p50 * 100 + 100)
     assert review.confidence == "Medium"
-    assert review.verdict == "Cautious Buy"
+    assert "verdict" not in review.model_dump()  # no buy/sell call from the LLMs
 
 
 def test_financial_report_mapping_is_internally_consistent():
@@ -130,7 +130,9 @@ def test_cli_ticker_prints_verdict_json(capsys):
     out = json.loads(capsys.readouterr().out)
     assert code == 0
     assert out["ticker"] == "TEST"
-    assert set(out) >= {"label", "gap_pct", "p_upside", "fair_value", "confidence"}
+    assert set(out) >= {"price_position", "gap_pct", "p_upside", "fair_value", "confidence",
+                        "market_implied_growth", "sensitivity", "context_note"}
+    assert "label" not in out
 
 
 def test_cli_filing_requires_price_and_shares(capsys):

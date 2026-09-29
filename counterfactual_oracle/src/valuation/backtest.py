@@ -92,7 +92,7 @@ class BacktestRow:
     ticker: str
     as_of: date
     score: float
-    label: str
+    price_position: str
     gap_pct: float
     p_upside: float
     confidence: str
@@ -141,7 +141,7 @@ def run_backtest(
                 result.skipped += 1
                 continue
             result.rows.append(BacktestRow(
-                ticker=ticker, as_of=as_of, score=score, label=verdict.label, gap_pct=verdict.gap_pct,
+                ticker=ticker, as_of=as_of, score=score, price_position=verdict.price_position, gap_pct=verdict.gap_pct,
                 p_upside=verdict.p_upside, confidence=verdict.confidence, forward_return=forward,
             ))
         if on_progress:
@@ -181,14 +181,14 @@ def summarize(
             "quantile_returns": buckets,
             "top_minus_bottom": buckets[0] - buckets[-1],
             "universe_return": universe,
-            "label_excess": {
-                label: g["forward_return"].mean() - universe for label, g in group.groupby("label")
+            "position_excess": {
+                position: g["forward_return"].mean() - universe for position, g in group.groupby("price_position")
             },
         })
 
     ics = np.array([d["rank_correlation"] for d in per_date])
     spreads = np.array([d["top_minus_bottom"] for d in per_date])
-    labels = sorted({label for d in per_date for label in d["label_excess"]})
+    positions = sorted({p for d in per_date for p in d["position_excess"]})
     return {
         "score_field": score_field,
         "dates": len(per_date),
@@ -199,9 +199,9 @@ def summarize(
         "hit_rate": float((spreads > 0).mean()),
         "quantile_returns": [float(np.mean([d["quantile_returns"][q] for d in per_date])) for q in range(quantiles)],
         "universe_return": float(np.mean([d["universe_return"] for d in per_date])),
-        "label_excess_return": {
-            label: float(np.mean([d["label_excess"][label] for d in per_date if label in d["label_excess"]]))
-            for label in labels
+        "position_excess_return": {
+            p: float(np.mean([d["position_excess"][p] for d in per_date if p in d["position_excess"]]))
+            for p in positions
         },
         "per_date": per_date,
     }

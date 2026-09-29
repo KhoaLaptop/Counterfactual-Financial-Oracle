@@ -29,7 +29,7 @@ class Oracle:
         self, fundamentals: Fundamentals, market: MarketSnapshot, num_simulations: int = 10000, seed: int = 42
     ) -> Verdict:
         verdict = evaluate(fundamentals, market, num_simulations=num_simulations, seed=seed)
-        if self.reviewer and verdict.label != "NOT_ASSESSABLE":
+        if self.reviewer and verdict.price_position != "NOT_ASSESSABLE":
             verdict = apply_debate(verdict, self.reviewer.review(fundamentals, verdict))
         return verdict
 

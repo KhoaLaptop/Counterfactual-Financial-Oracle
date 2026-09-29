@@ -1,9 +1,10 @@
 """
-Universe ranker: run the single-company verdict over many tickers and rank them.
+Universe screener: run the single-company valuation over many tickers and sort them.
 
-Score = median gap / ((P90 - P10) / price): margin of safety per unit of
-uncertainty. The optional debate runs only on the top N after ranking and can
-lower confidence but never changes the order.
+Score = median gap / ((P90 - P10) / price): how far the model's value sits from the
+price, per unit of model uncertainty. This is a sort order for valuation context,
+not a return forecast: in backtests it did not predict 1- or 3-year returns.
+The optional debate runs only on the top N and can lower confidence, never reorder.
 """
 
 import threading
@@ -14,9 +15,9 @@ from typing import Callable, Dict, List, Optional, Tuple
 from pydantic import BaseModel, Field
 
 from .debate import Reviewer
-from .models import Confidence, DebateReview, FairValue, Fundamentals, Label, Verdict
+from .models import Confidence, DebateReview, FairValue, Fundamentals, PricePosition, Verdict
 from .oracle import Oracle
-from .verdict import apply_debate, evaluate
+from .verdict import CONTEXT_NOTE, apply_debate, evaluate
 
 
 class RankedEntry(BaseModel):
@@ -24,7 +25,7 @@ class RankedEntry(BaseModel):
     ticker: str
     company_name: str = ""
     score: float
-    label: Label
+    price_position: PricePosition
     price: float
     gap_pct: float
     p_upside: float
@@ -46,6 +47,7 @@ class Ranking(BaseModel):
     generated_at: str
     simulations: int
     seed: int
+    context_note: str = CONTEXT_NOTE
     entries: List[RankedEntry] = Field(default_factory=list)
     excluded: List[Excluded] = Field(default_factory=list)
 
@@ -55,7 +57,7 @@ MIN_SPREAD = 0.05  # a zero-width distribution (e.g. fair value $0 everywhere) s
 
 def risk_adjusted_gap(verdict) -> Optional[float]:
     """Median gap divided by the P10-P90 spread relative to price; None if not ranked."""
-    if verdict.label == "NOT_ASSESSABLE" or verdict.fair_value is None:
+    if verdict.price_position == "NOT_ASSESSABLE" or verdict.fair_value is None:
         return None
     spread = (verdict.fair_value.p90 - verdict.fair_value.p10) / verdict.price
     return verdict.gap_pct / max(spread, MIN_SPREAD)
@@ -108,7 +110,7 @@ def rank_universe(
         if reviewer is not None and rank <= debate_top:
             verdict = apply_debate(verdict, reviewer.review(fundamentals, verdict))
         entries.append(RankedEntry(
-            rank=rank, ticker=ticker, company_name=verdict.company_name, score=score, label=verdict.label,
+            rank=rank, ticker=ticker, company_name=verdict.company_name, score=score, price_position=verdict.price_position,
             price=verdict.price, gap_pct=verdict.gap_pct, p_upside=verdict.p_upside,
             confidence=verdict.confidence, fair_value=verdict.fair_value, period_end=verdict.period_end,
             basis=verdict.basis, debate=verdict.debate,

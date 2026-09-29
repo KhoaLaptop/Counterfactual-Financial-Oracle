@@ -7,7 +7,11 @@ from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
-Label = Literal["UNDERVALUED", "FAIRLY_VALUED", "OVERVALUED", "NOT_ASSESSABLE"]
+# Where the market price sits against the model's P10-P90 fair-value range. Descriptive
+# only: backtests found the model/price gap did not predict returns (research/ablations.md).
+PricePosition = Literal[
+    "PRICE_BELOW_MODEL_RANGE", "PRICE_WITHIN_MODEL_RANGE", "PRICE_ABOVE_MODEL_RANGE", "NOT_ASSESSABLE"
+]
 Confidence = Literal["High", "Medium", "Low"]
 
 
@@ -56,9 +60,8 @@ class FairValue(BaseModel):
 
 
 class DebateReview(BaseModel):
-    """Qualitative review layered on top of the quantitative verdict."""
+    """Qualitative review layered on top of the valuation (no buy/sell call)."""
     narrative: str
-    verdict: str
     confidence: Confidence
     agreements: List[str] = Field(default_factory=list)
     disagreements: List[str] = Field(default_factory=list)
@@ -67,11 +70,13 @@ class DebateReview(BaseModel):
 class Verdict(BaseModel):
     ticker: str
     company_name: str = ""
-    label: Label
+    price_position: PricePosition
     price: Optional[float] = None
     gap_pct: Optional[float] = None  # median fair value / price - 1
     p_upside: Optional[float] = None  # P(fair value > price)
     fair_value: Optional[FairValue] = None
+    market_implied_growth: Optional[float] = None  # reverse DCF: starting growth the price implies
+    sensitivity: Dict[str, float] = Field(default_factory=dict)  # P50 per share under one-change scenarios
     confidence: Optional[Confidence] = None
     confidence_reasons: List[str] = Field(default_factory=list)
     reason: str = ""  # why NOT_ASSESSABLE
@@ -82,5 +87,6 @@ class Verdict(BaseModel):
     revenue_forecast_p50: List[float] = Field(default_factory=list)
     fcf_forecast_p50: List[float] = Field(default_factory=list)
     debate: Optional[DebateReview] = None
+    context_note: str = ""
     simulations: int = 0
     seed: int = 0

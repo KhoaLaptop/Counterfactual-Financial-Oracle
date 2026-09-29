@@ -9,7 +9,8 @@ import pytest
 from counterfactual_oracle.src.valuation.assumptions import build_assumptions
 from counterfactual_oracle.src.valuation.models import Fundamentals, MarketSnapshot
 from counterfactual_oracle.src.valuation.verdict import (
-    classify,
+    CONTEXT_NOTE,
+    price_position,
     evaluate,
     quantitative_confidence,
 )
@@ -86,17 +87,15 @@ def test_net_debt_and_ebit_margin():
 # --- classification & confidence -----------------------------------------
 
 @pytest.mark.parametrize(
-    "gap, p_upside, label",
+    "price, position",
     [
-        (0.20, 0.70, "UNDERVALUED"),
-        (0.20, 0.55, "FAIRLY_VALUED"),
-        (0.10, 0.90, "FAIRLY_VALUED"),
-        (-0.20, 0.30, "OVERVALUED"),
-        (-0.20, 0.45, "FAIRLY_VALUED"),
+        (80.0, "PRICE_BELOW_MODEL_RANGE"),   # under P10
+        (100.0, "PRICE_WITHIN_MODEL_RANGE"),
+        (140.0, "PRICE_ABOVE_MODEL_RANGE"),  # over P90
     ],
 )
-def test_classify_bands(gap, p_upside, label):
-    assert classify(gap, p_upside) == label
+def test_price_position_describes_where_price_sits(price, position):
+    assert price_position(price, p10=90.0, p90=130.0) == position
 
 
 @pytest.mark.parametrize(
@@ -131,20 +130,21 @@ def test_verdict_reports_terminal_value_share():
 def test_evaluate_returns_verdict_consistent_with_distribution():
     verdict = evaluate(_fundamentals(), _market(), num_simulations=4000, seed=1)
 
-    assert verdict.label in {"UNDERVALUED", "FAIRLY_VALUED", "OVERVALUED"}
+    assert verdict.price_position in {"PRICE_BELOW_MODEL_RANGE", "PRICE_WITHIN_MODEL_RANGE",
+                                      "PRICE_ABOVE_MODEL_RANGE"}
     assert verdict.fair_value.p10 < verdict.fair_value.p50 < verdict.fair_value.p90
     assert verdict.gap_pct == pytest.approx(verdict.fair_value.p50 / 8.0 - 1)
     assert 0.0 <= verdict.p_upside <= 1.0
     assert verdict.confidence in {"High", "Medium", "Low"}
 
 
-def test_evaluate_cheap_stock_is_undervalued_and_expensive_is_overvalued():
+def test_evaluate_price_below_and_above_the_model_range():
     cheap = evaluate(_fundamentals(), _market(price=2.0), num_simulations=4000, seed=1)
     pricey = evaluate(_fundamentals(), _market(price=200.0), num_simulations=4000, seed=1)
 
-    assert cheap.label == "UNDERVALUED"
+    assert cheap.price_position == "PRICE_BELOW_MODEL_RANGE"
     assert cheap.p_upside > 0.9
-    assert pricey.label == "OVERVALUED"
+    assert pricey.price_position == "PRICE_ABOVE_MODEL_RANGE"
     assert pricey.p_upside < 0.1
 
 
@@ -161,7 +161,7 @@ def test_evaluate_cheap_stock_is_undervalued_and_expensive_is_overvalued():
 def test_evaluate_marks_unfit_companies_not_assessable(overrides, reason_fragment):
     verdict = evaluate(_fundamentals(**overrides), _market(), num_simulations=100, seed=1)
 
-    assert verdict.label == "NOT_ASSESSABLE"
+    assert verdict.price_position == "NOT_ASSESSABLE"
     assert reason_fragment in verdict.reason.lower()
     assert verdict.fair_value is None
 
@@ -169,7 +169,7 @@ def test_evaluate_marks_unfit_companies_not_assessable(overrides, reason_fragmen
 def test_evaluate_falls_back_to_market_share_count():
     verdict = evaluate(_fundamentals(shares=None), _market(shares_outstanding=100.0),
                        num_simulations=500, seed=1)
-    assert verdict.label != "NOT_ASSESSABLE"
+    assert verdict.price_position != "NOT_ASSESSABLE"
 
 
 def test_financial_company_reason_wins_over_missing_fields():
@@ -182,7 +182,7 @@ def test_data_note_explains_not_assessable():
         _fundamentals(revenue=None, data_note="no full fiscal year in SEC XBRL data (new registrant?)"),
         _market(), num_simulations=100,
     )
-    assert verdict.label == "NOT_ASSESSABLE"
+    assert verdict.price_position == "NOT_ASSESSABLE"
     assert "new registrant" in verdict.reason
 
 
@@ -190,7 +190,7 @@ def test_data_note_is_reported_on_assessable_verdicts():
     note = "operating income estimated as pretax income + interest expense"
     verdict = evaluate(_fundamentals(data_note=note), _market(), num_simulations=500)
 
-    assert verdict.label != "NOT_ASSESSABLE"
+    assert verdict.price_position != "NOT_ASSESSABLE"
     assert note in verdict.confidence_reasons
 
 
@@ -241,7 +241,7 @@ def test_regulated_utilities_are_not_assessable(sic, assessable):
     # Electric (4911), gas distribution (4924), water (4941) are out; pipelines (4922)
     # and waste (4953) are ordinary businesses.
     verdict = evaluate(_fundamentals(sic=sic), _market(), num_simulations=200)
-    assert (verdict.label != "NOT_ASSESSABLE") == assessable
+    assert (verdict.price_position != "NOT_ASSESSABLE") == assessable
     if not assessable:
         assert "utility" in verdict.reason.lower()
 
@@ -267,3 +267,33 @@ def test_model_options_for_horizon_and_margin_fade():
 
     verdict = evaluate(_fundamentals(), _market(), num_simulations=300, horizon_years=5, hold_years=1)
     assert verdict.assumptions["horizon_years"] == 5
+
+
+# --- valuation context --------------------------------------------------------------
+
+def test_every_verdict_carries_the_backtest_context_note():
+    assessed = evaluate(_fundamentals(), _market(), num_simulations=300)
+    excluded = evaluate(_fundamentals(sic=6021), _market(), num_simulations=300)
+
+    for verdict in (assessed, excluded):
+        assert verdict.context_note == CONTEXT_NOTE
+    assert "not a buy/sell signal" in CONTEXT_NOTE
+    assert "did not predict" in CONTEXT_NOTE
+
+
+def test_market_implied_growth_is_reported():
+    # ~11% recent growth: a low price implies much less, a high price much more.
+    cheap = evaluate(_fundamentals(), _market(price=15.0), num_simulations=500)
+    pricey = evaluate(_fundamentals(), _market(price=60.0), num_simulations=500)
+    extreme = evaluate(_fundamentals(), _market(price=2.0), num_simulations=500)
+
+    assert cheap.market_implied_growth < cheap.assumptions["growth_start"] < pricey.market_implied_growth
+    assert extreme.market_implied_growth is None  # would need < -20% growth: outside the search range
+
+
+def test_sensitivities_move_in_the_expected_direction():
+    s = evaluate(_fundamentals(), _market(), num_simulations=500).sensitivity
+
+    assert s["wacc +1pt"] < s["base"] < s["wacc -1pt"]
+    assert s["growth -5pt"] < s["base"] < s["growth +5pt"]
+    assert s["margin -2pt"] < s["base"] < s["margin +2pt"]

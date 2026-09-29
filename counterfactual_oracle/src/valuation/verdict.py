@@ -1,18 +1,27 @@
 """
-Single-company verdict: compare the fair-value distribution to the market price.
+Single-company valuation context: the model's fair-value distribution next to the
+market price, the growth the price implies, and what moves the value.
+
+This is deliberately not a buy/sell call: in point-in-time backtests on S&P 500
+names (2016-2025) the model/price gap did not predict 1- or 3-year returns.
 """
 
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
 from .assumptions import build_assumptions, growth_jump
-from .dcf import simulate_fair_value
-from .models import Confidence, DebateReview, FairValue, Fundamentals, Label, MarketSnapshot, Verdict
+from dataclasses import replace
 
-GAP_THRESHOLD = 0.15
-P_UPSIDE_BULL = 0.6
-P_UPSIDE_BEAR = 0.4
+from .dcf import ValuationAssumptions, implied_growth, simulate_fair_value
+from .models import Confidence, DebateReview, FairValue, Fundamentals, MarketSnapshot, PricePosition, Verdict
+
+CONTEXT_NOTE = (
+    "Valuation context, not a buy/sell signal. In point-in-time backtests on S&P 500 names "
+    "(2016-2025), the gap between this model's value and the market price did not predict "
+    "1- or 3-year returns (see counterfactual_oracle/research/ablations.md)."
+)
+SENSITIVITY_SIMULATIONS = 2000
 CONFIDENCE_LEVELS: List[Confidence] = ["Low", "Medium", "High"]
 MISSING_FIELDS_DOWNGRADE = 2
 TERMINAL_SHARE_DOWNGRADE = 0.75
@@ -20,12 +29,32 @@ INVESTMENT_PHASE_CAPEX_TO_DA = 2.0
 HIGH_LEVERAGE = 3.0  # net debt / market value of equity
 
 
-def classify(gap: float, p_upside: float) -> Label:
-    if gap >= GAP_THRESHOLD and p_upside >= P_UPSIDE_BULL:
-        return "UNDERVALUED"
-    if gap <= -GAP_THRESHOLD and p_upside <= P_UPSIDE_BEAR:
-        return "OVERVALUED"
-    return "FAIRLY_VALUED"
+def price_position(price: float, p10: float, p90: float) -> PricePosition:
+    """Where the market price sits against the model's P10-P90 range (descriptive only)."""
+    if price < p10:
+        return "PRICE_BELOW_MODEL_RANGE"
+    if price > p90:
+        return "PRICE_ABOVE_MODEL_RANGE"
+    return "PRICE_WITHIN_MODEL_RANGE"
+
+
+def _sensitivity(a: ValuationAssumptions, num_simulations: int, seed: int) -> Dict[str, float]:
+    """Median value per share with one assumption changed at a time."""
+    def shifted_margin(delta: float) -> Dict:
+        target = a.margin_target + delta if a.margin_target is not None else None
+        return {"ebit_margin": a.ebit_margin + delta, "margin_target": target}
+
+    scenarios = {
+        "base": {},
+        "wacc +1pt": {"wacc": a.wacc + 0.01},
+        "wacc -1pt": {"wacc": a.wacc - 0.01},
+        "growth +5pt": {"growth_start": a.growth_start + 0.05},
+        "growth -5pt": {"growth_start": a.growth_start - 0.05},
+        "margin +2pt": shifted_margin(0.02),
+        "margin -2pt": shifted_margin(-0.02),
+    }
+    n = min(num_simulations, SENSITIVITY_SIMULATIONS)
+    return {name: simulate_fair_value(replace(a, **change), n, seed).per_share_p50 for name, change in scenarios.items()}
 
 
 def _downgrade(level: Confidence) -> Confidence:
@@ -103,12 +132,12 @@ def evaluate(
     shares = f.shares or m.shares_outstanding
     header = dict(
         ticker=f.ticker, company_name=f.name, price=m.price, period_end=f.period_end,
-        basis=f.basis, simulations=num_simulations, seed=seed,
+        basis=f.basis, simulations=num_simulations, seed=seed, context_note=CONTEXT_NOTE,
     )
 
     reason = _unfit_reason(f, shares)
     if reason:
-        return Verdict(label="NOT_ASSESSABLE", reason=reason, **header)
+        return Verdict(price_position="NOT_ASSESSABLE", reason=reason, **header)
 
     assumptions, missing = build_assumptions(
         f, m, shares=shares, horizon_years=horizon_years, hold_years=hold_years, margin_fade=margin_fade,
@@ -123,12 +152,15 @@ def evaluate(
         assumptions.net_debt / (m.price * assumptions.shares),
     )
     if growth_jump(f):
-        reasons.append("Revenue growth jumped vs its 3-year trend (acquisition?); using the lower rate")
+        reasons.append("Recent revenue growth departs sharply from its 3-year trend (acquisition, one-off or "
+                       "a demand shift); using the lower rate")
     if f.data_note:
         reasons.append(f.data_note)
 
     return Verdict(
-        label=classify(gap, p_upside),
+        price_position=price_position(m.price, dist.per_share_p10, dist.per_share_p90),
+        market_implied_growth=implied_growth(assumptions, m.price),
+        sensitivity=_sensitivity(assumptions, num_simulations, seed),
         gap_pct=gap,
         p_upside=p_upside,
         fair_value=FairValue(
