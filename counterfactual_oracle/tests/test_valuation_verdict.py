@@ -168,3 +168,25 @@ def test_evaluate_falls_back_to_market_share_count():
     verdict = evaluate(_fundamentals(shares=None), _market(shares_outstanding=100.0),
                        num_simulations=500, seed=1)
     assert verdict.label != "NOT_ASSESSABLE"
+
+
+def test_financial_company_reason_wins_over_missing_fields():
+    verdict = evaluate(_fundamentals(sic=6021, operating_income=None), _market(), num_simulations=100)
+    assert "financial" in verdict.reason.lower()
+
+
+def test_data_note_explains_not_assessable():
+    verdict = evaluate(
+        _fundamentals(revenue=None, data_note="no full fiscal year in SEC XBRL data (new registrant?)"),
+        _market(), num_simulations=100,
+    )
+    assert verdict.label == "NOT_ASSESSABLE"
+    assert "new registrant" in verdict.reason
+
+
+def test_data_note_is_reported_on_assessable_verdicts():
+    note = "operating income estimated as pretax income + interest expense"
+    verdict = evaluate(_fundamentals(data_note=note), _market(), num_simulations=500)
+
+    assert verdict.label != "NOT_ASSESSABLE"
+    assert note in verdict.confidence_reasons

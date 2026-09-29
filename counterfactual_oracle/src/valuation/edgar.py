@@ -184,12 +184,22 @@ def parse_company_facts(
     end = _latest_flow_end(revenue_entries)
     base = Fundamentals(ticker=ticker.upper(), name=name or facts.get("entityName", ""), cik=cik, sic=sic)
     if end is None:
-        return base.model_copy(update={"shares": _shares(facts.get("facts", {}))})
+        note = "no full fiscal year in SEC XBRL data (new registrant?)" if revenue_entries else ""
+        return base.model_copy(update={"shares": _shares(facts.get("facts", {})), "data_note": note})
 
     def revenue_near(years: int) -> Optional[float]:
         target = _years_before(end, years)
         value = flow_at(revenue_entries, target)
         return value if value is not None else _annual_near(revenue_entries, target, NEARBY_ANNUAL)
+
+    notes = []
+    pretax = _flow(gaap, PRETAX_TAGS, end)
+    interest = _flow(gaap, INTEREST_TAGS, end)
+    operating_income = _flow(gaap, OPERATING_INCOME_TAGS, end)
+    if operating_income is None and pretax is not None:
+        # Some companies (e.g. oil majors) never report operating income; use an EBIT proxy.
+        operating_income = pretax + (interest or 0.0)
+        notes.append("operating income estimated as pretax income + interest expense")
 
     is_fiscal_year = _annual_near(revenue_entries, end, DATE_TOLERANCE) is not None
     return base.model_copy(update=dict(
@@ -198,16 +208,17 @@ def parse_company_facts(
         revenue=flow_at(revenue_entries, end),
         revenue_prior=revenue_near(1),
         revenue_3y_ago=revenue_near(3),
-        operating_income=_flow(gaap, OPERATING_INCOME_TAGS, end),
+        operating_income=operating_income,
         depreciation_amortization=_flow(gaap, DA_TAGS, end),
         capex=_flow(gaap, CAPEX_TAGS, end),
         change_in_working_capital=_flow(gaap, WORKING_CAPITAL_TAGS, end),
         income_tax=_flow(gaap, TAX_TAGS, end),
-        pretax_income=_flow(gaap, PRETAX_TAGS, end),
-        interest_expense=_flow(gaap, INTEREST_TAGS, end),
+        pretax_income=pretax,
+        interest_expense=interest,
         cash=_sum_present(_instant(gaap, CASH_TAGS, end), _instant(gaap, SHORT_TERM_INVESTMENT_TAGS, end)),
         total_debt=_total_debt(gaap, end),
         shares=_shares(facts.get("facts", {})),
+        data_note="; ".join(notes),
     ))
 
 

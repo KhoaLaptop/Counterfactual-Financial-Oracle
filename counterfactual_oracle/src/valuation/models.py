@@ -34,6 +34,7 @@ class Fundamentals(BaseModel):
     cash: Optional[float] = None  # cash + short-term investments
     total_debt: Optional[float] = None
     shares: Optional[float] = None
+    data_note: str = ""  # caveats from parsing, e.g. estimated fields or thin history
 
 
 class MarketSnapshot(BaseModel):

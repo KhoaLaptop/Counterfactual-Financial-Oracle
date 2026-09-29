@@ -212,3 +212,35 @@ def test_fetcher_does_not_retry_client_errors():
     with pytest.raises(requests.HTTPError):
         _fetcher(session)("https://data.sec.gov/x.json")
     assert session.calls == 1
+
+
+# --- live-data edge cases ----------------------------------------------------------
+
+def test_operating_income_falls_back_to_pretax_plus_interest():
+    # Exxon-style: no OperatingIncomeLoss tag, only pretax income and interest.
+    facts = _facts()
+    gaap = facts["facts"]["us-gaap"]
+    del gaap["OperatingIncomeLoss"]
+    gaap["IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest"] = _concept(
+        _e("2024-01-01", "2024-12-31", 180, form="10-K"),
+        _e("2024-01-01", "2024-06-30", 80),
+        _e("2025-01-01", "2025-06-30", 100),
+    )
+    gaap["InterestExpense"] = _concept(_e("2024-01-01", "2024-12-31", 20, form="10-K"))
+
+    f = parse_company_facts(facts, ticker="EXM")
+
+    assert f.operating_income == pytest.approx((180 + 100 - 80) + 20)
+    assert "operating income estimated" in f.data_note
+
+
+def test_only_year_to_date_history_is_explained():
+    # A new registrant (e.g. after a reorganization) has one 10-Q and no fiscal year.
+    facts = {"entityName": "NewCo Holdings", "facts": {"us-gaap": {
+        "Revenues": _concept(_e("2026-01-01", "2026-06-30", 201_155), _e("2026-04-01", "2026-06-30", 116_017)),
+    }}}
+
+    f = parse_company_facts(facts, ticker="NEW")
+
+    assert f.revenue is None
+    assert "no full fiscal year" in f.data_note

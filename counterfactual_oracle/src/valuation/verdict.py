@@ -59,14 +59,15 @@ def _is_financial(sic: Optional[int]) -> bool:
 
 
 def _unfit_reason(f: Fundamentals, shares: Optional[float]) -> Optional[str]:
-    if f.revenue is None or f.revenue <= 0:
-        return "Revenue is missing or not positive"
-    if f.operating_income is None:
-        return "Operating income is missing"
-    if not shares:
-        return "Share count is missing"
     if _is_financial(f.sic):
         return f"Financial company (SIC {f.sic}): free-cash-flow DCF does not apply"
+    note = f" ({f.data_note})" if f.data_note else ""
+    if f.revenue is None or f.revenue <= 0:
+        return "Revenue is missing or not positive" + note
+    if f.operating_income is None:
+        return "Operating income is missing" + note
+    if not shares:
+        return "Share count is missing"
     base_fcf = f.operating_income + (f.depreciation_amortization or 0) - abs(f.capex or 0)
     if f.operating_income <= 0 and base_fcf <= 0:
         return "Operating income and free cash flow are negative"
@@ -97,6 +98,8 @@ def evaluate(
     confidence, reasons = quantitative_confidence(
         dist.per_share_p10, dist.per_share_p90, m.price, missing, dist.terminal_value_share,
     )
+    if f.data_note:
+        reasons.append(f.data_note)
 
     return Verdict(
         label=classify(gap, p_upside),
