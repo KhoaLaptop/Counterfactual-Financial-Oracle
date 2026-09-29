@@ -116,6 +116,13 @@ class FinancialNormalizer:
         ],
     }
     
+    PARENT_ATTRIBUTABLE = {
+        'net_income': lambda label: "net income attributable to" in label or "net earnings attributable to" in label,
+        'total_equity': lambda label: label.startswith("total") and "liabilities" not in label and (
+            "shareholders' equity" in label or "stockholders' equity" in label
+        ),
+    }
+
     @classmethod
     def clean_number(cls, text: str) -> Optional[float]:
         """
@@ -246,7 +253,19 @@ class FinancialNormalizer:
             Found value or default
         """
         synonyms = cls.FIELD_SYNONYMS.get(field_name, [field_name])
-        
+
+        # Prefer amounts attributable to the company over consolidated totals
+        # that include noncontrolling interests (e.g. "net income attributable to Walmart").
+        if field_name in cls.PARENT_ATTRIBUTABLE:
+            for key, val_str in data_map.items():
+                label = key.lower().replace("\u2019", "'")
+                if "noncontrolling" in label or "non-controlling" in label:
+                    continue
+                if cls.PARENT_ATTRIBUTABLE[field_name](label):
+                    val = cls.clean_number(val_str)
+                    if val is not None:
+                        return val
+
         # Try exact match first
         for synonym in synonyms:
             term = synonym.lower()

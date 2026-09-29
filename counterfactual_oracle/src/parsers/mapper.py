@@ -131,76 +131,92 @@ class FinancialMapper:
             pdf_metadata=pdf_metadata
         )
     
+    # Line items that identify each statement's table; a table's score is how many it contains.
+    SECTION_FIELDS = {
+        'income_statement': ['revenue', 'cogs', 'gross_profit', 'opex', 'operating_income', 'taxes', 'net_income'],
+        'balance_sheet': ['total_assets', 'total_liabilities', 'total_equity', 'cash', 'accounts_payable',
+                          'accounts_receivable', 'inventory'],
+        'cash_flow': ['cfo', 'capex', 'dividends', 'share_repurchases', 'depreciation'],
+    }
+    MIN_TABLE_SCORE = 2
+    HEADING_BONUS = 2
+    HEADING_WINDOW = 400  # a heading this close before a table labels it
+
     def _extract_sections(self, markdown_content: str) -> Dict[str, Dict[str, str]]:
-        """Extract data by financial statement section."""
-        sections = {
-            'income_statement': {},
-            'balance_sheet': {},
-            'cash_flow': {}
-        }
-        
-        # Find section headers and their positions
-        items = []
-        for section, pattern in self.SECTION_PATTERNS.items():
-            for match in re.finditer(pattern, markdown_content, re.IGNORECASE):
-                items.append({
-                    'type': 'header',
-                    'section': section,
-                    'start': match.start()
-                })
-        
-        # Find tables
-        html_table_pattern = r"<table[^>]*>.*?</table>"
-        for match in re.finditer(html_table_pattern, markdown_content, re.DOTALL | re.IGNORECASE):
-            items.append({
-                'type': 'html_table',
-                'content': match.group(0),
-                'start': match.start()
-            })
-        
-        md_table_pattern = r"(?:^\|.*$(?:\n|$))+"
-        for match in re.finditer(md_table_pattern, markdown_content, re.MULTILINE):
-            items.append({
-                'type': 'md_table',
-                'content': match.group(0),
-                'start': match.start()
-            })
-        
-        # Sort by position
-        items.sort(key=lambda x: x['start'])
-        
-        # Assign tables to sections
-        current_section = None
-        for item in items:
-            if item['type'] == 'header':
-                current_section = item['section']
-            elif item['type'] in ['html_table', 'md_table'] and current_section:
-                table_data = self._parse_table(item['content'], item['type'])
-                sections[current_section].update(table_data)
-        
-        # Fallback: if no sections found, use all data for all
-        if all(not v for v in sections.values()):
-            all_data = {}
-            for item in items:
-                if item['type'] in ['html_table', 'md_table']:
-                    all_data.update(self._parse_table(item['content'], item['type']))
-            for section in sections:
-                sections[section] = all_data
-        
+        """
+        Pick each statement's table by content, not position.
+
+        Every table is scored per statement by the distinct line items it contains,
+        plus a bonus when a statement heading sits just above it. The best-scoring
+        table wins (earliest on ties), and a directly following continuation table
+        (a statement split across a page break) is merged in. Earlier values win.
+        """
+        tables = self._find_tables(markdown_content)
+        headings = [
+            (match.start(), section)
+            for section, pattern in self.SECTION_PATTERNS.items()
+            for match in re.finditer(pattern, markdown_content, re.IGNORECASE)
+        ]
+
+        scored = []
+        for start, end, data in tables:
+            scores = {}
+            for section, fields in self.SECTION_FIELDS.items():
+                hits = sum(FinancialNormalizer.find_field_value(data, f) is not None for f in fields)
+                if any(sec == section and 0 <= start - pos <= self.HEADING_WINDOW for pos, sec in headings):
+                    hits += self.HEADING_BONUS if hits else 0
+                scores[section] = hits
+            scored.append((start, end, data, scores))
+
+        sections = {section: {} for section in self.SECTION_FIELDS}
+        for section in sections:
+            best = max(range(len(scored)), key=lambda i: (scored[i][3][section], -i), default=None)
+            if best is None or scored[best][3][section] < self.MIN_TABLE_SCORE:
+                continue
+            chosen = [scored[best][2]]
+            nxt = best + 1
+            if nxt < len(scored):
+                _, _, cont_data, cont_scores = scored[nxt]
+                is_continuation = (
+                    cont_scores[section] >= 1
+                    and cont_scores[section] == max(cont_scores.values())
+                    and not self._has_text_between(markdown_content, scored[best][1], scored[nxt][0])
+                )
+                if is_continuation:
+                    chosen.append(cont_data)
+            for data in chosen:
+                for key, value in data.items():
+                    sections[section].setdefault(key, value)
         return sections
-    
+
+    @staticmethod
+    def _has_text_between(markdown: str, end: int, start: int) -> bool:
+        """True when real prose (not just page-break markup) separates two tables."""
+        gap = re.sub(r"<!--.*?-->|\*|#+[^\n]*\(continued\)[^\n]*", "", markdown[end:start], flags=re.I | re.S)
+        return len(gap.strip()) > 80
+
+    def _find_tables(self, markdown_content: str):
+        """All tables in document order as (start, end, {label: value})."""
+        found = []
+        for match in re.finditer(r"<table[^>]*>.*?</table>", markdown_content, re.DOTALL | re.IGNORECASE):
+            found.append((match.start(), match.end(), self._parse_table(match.group(0), 'html_table')))
+        for match in re.finditer(r"(?:^\|.*$(?:\n|$))+", markdown_content, re.MULTILINE):
+            found.append((match.start(), match.end(), self._parse_table(match.group(0), 'md_table')))
+        return sorted(found, key=lambda t: t[0])
+
     def _parse_table(self, content: str, table_type: str) -> Dict[str, str]:
-        """Parse table content into key-value pairs."""
+        """Parse a table into {row label: first numeric value}; percentages are skipped."""
         rows = []
-        
+
         if table_type == 'html_table':
             parser = TableHTMLParser()
             parser.feed(content)
             if parser.tables:
                 rows = parser.tables[0]
         elif table_type == 'md_table':
-            lines = content.strip().split('\n')
-            for line in lines:
+            for line in content.strip().split('\n'):
+                if re.fullmatch(r"[\s|:\-]+", line):  # markdown separator row
+                    continue
                 cells = [c.strip() for c in line.split('|')]
                 if len(cells) > 2:
                     if cells[0] == '':
@@ -208,20 +224,22 @@ class FinancialMapper:
                     if cells[-1] == '':
                         cells.pop(-1)
                     rows.append(cells)
-        
-        # Convert to map
+
         result = {}
         for row in rows:
             if len(row) >= 2:
-                key = row[0].strip().lower()
-                # Find first valid number in remaining cells
+                key = row[0].strip().lower().rstrip(':').strip()
+                if not key or key in result:
+                    continue
                 for cell in row[1:]:
+                    if '%' in cell:
+                        continue
                     if FinancialNormalizer.clean_number(cell) is not None:
                         result[key] = cell
                         break
-        
+
         return result
-    
+
     def _build_income_statement(
         self,
         data: Dict[str, str],
