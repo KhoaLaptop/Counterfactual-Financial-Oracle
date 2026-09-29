@@ -34,6 +34,7 @@ class Fundamentals(BaseModel):
     cash: Optional[float] = None  # cash + short-term investments
     total_debt: Optional[float] = None
     shares: Optional[float] = None
+    shares_as_of: Optional[date] = None  # when the share count was measured (for split adjustment)
     operating_margin_5y: Optional[float] = None  # median of up to 5 fiscal years (needs 3)
     data_note: str = ""  # caveats from parsing, e.g. estimated fields or thin history
 

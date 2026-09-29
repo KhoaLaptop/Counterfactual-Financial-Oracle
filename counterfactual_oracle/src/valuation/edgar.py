@@ -14,7 +14,7 @@ import threading
 import time
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -228,11 +228,12 @@ def _total_debt(gaap: Dict, end: date) -> Optional[float]:
     return _sum_present(noncurrent, _instant(gaap, CURRENT_LTD_TAGS, end), short_term)
 
 
-def _shares(facts: Dict, period_end: Optional[date] = None) -> Optional[float]:
+def _shares(facts: Dict, period_end: Optional[date] = None) -> Tuple[Optional[float], Optional[date]]:
     """
-    Shares from the latest cover page, unless that value is stale: multi-class filers
-    tag cover shares per class, which companyfacts omits, leaving years-old totals.
-    Otherwise the latest diluted weighted-average count (all classes).
+    (share count, date it was measured). From the latest cover page, unless that value
+    is stale: multi-class filers tag cover shares per class, which companyfacts omits,
+    leaving years-old totals. Otherwise the latest diluted weighted-average count.
+    The date matters for split adjustment in backtests.
     """
     cover = facts.get("dei", {}).get("EntityCommonStockSharesOutstanding", {}).get("units", {}).get("shares", [])
     if period_end is not None:
@@ -242,10 +243,17 @@ def _shares(facts: Dict, period_end: Optional[date] = None) -> Optional[float]:
         at_end = [e for e in cover if e["end"] == latest_end]
         latest_filed = max(e.get("filed", "") for e in at_end)
         # Multi-class companies report one entry per share class.
-        return float(sum(e["val"] for e in at_end if e.get("filed", "") == latest_filed))
-    diluted = facts.get("us-gaap", {}).get("WeightedAverageNumberOfDilutedSharesOutstanding", {})
-    entries = diluted.get("units", {}).get("shares", [])
-    return float(max(entries, key=lambda e: (e["end"], e.get("filed", "")))["val"]) if entries else None
+        return float(sum(e["val"] for e in at_end if e.get("filed", "") == latest_filed)), _d(latest_end)
+    # Statement share counts (balance-sheet total, then diluted weighted average) cover all
+    # classes and are restated for splits before issuance: their basis is the filing date.
+    for tag in ("CommonStockSharesOutstanding", "WeightedAverageNumberOfDilutedSharesOutstanding"):
+        entries = facts.get("us-gaap", {}).get(tag, {}).get("units", {}).get("shares", [])
+        if period_end is not None:
+            entries = [e for e in entries if _d(e["end"]) >= period_end - STALE_AFTER]
+        if entries:
+            latest = max(entries, key=lambda e: (e["end"], e.get("filed", "")))
+            return float(latest["val"]), _d(latest.get("filed") or latest["end"])
+    return None, None
 
 
 def _filed_by(facts: Dict, as_of: date) -> Dict:
@@ -283,7 +291,8 @@ def parse_company_facts(
     base = Fundamentals(ticker=ticker.upper(), name=name or facts.get("entityName", ""), cik=cik, sic=sic)
     if end is None:
         note = "no full fiscal year in SEC XBRL data (new registrant?)" if revenue_entries else ""
-        return base.model_copy(update={"shares": _shares(facts.get("facts", {})), "data_note": note})
+        shares, shares_as_of = _shares(facts.get("facts", {}))
+        return base.model_copy(update={"shares": shares, "shares_as_of": shares_as_of, "data_note": note})
 
     def revenue_near(years: int) -> Optional[float]:
         target = _years_before(end, years)
@@ -299,6 +308,7 @@ def parse_company_facts(
         operating_income = pretax + (interest or 0.0)
         notes.append("operating income estimated as pretax income + interest expense")
 
+    shares, shares_as_of = _shares(facts.get("facts", {}), end)
     is_fiscal_year = _annual_near(revenue_entries, end, DATE_TOLERANCE) is not None
     return base.model_copy(update=dict(
         period_end=end,
@@ -316,7 +326,8 @@ def parse_company_facts(
         interest_expense=interest,
         cash=_sum_present(_instant(gaap, CASH_TAGS, end), _instant(gaap, SHORT_TERM_INVESTMENT_TAGS, end)),
         total_debt=_total_debt(gaap, end),
-        shares=_shares(facts.get("facts", {}), end),
+        shares=shares,
+        shares_as_of=shares_as_of,
         data_note="; ".join(notes),
     ))
 
@@ -341,6 +352,10 @@ class SecClient:
         if row is None:
             raise LookupError(f"Ticker {ticker!r} not found in SEC company list")
         return f"{int(row['cik_str']):010d}"
+
+    def submissions(self, ticker: str) -> Dict:
+        """Company profile (name, SIC code, filings index)."""
+        return self._fetch(SUBMISSIONS_URL.format(cik=self.cik_for(ticker)))
 
     def company_facts(self, ticker: str) -> Dict:
         """Raw XBRL companyfacts JSON for a ticker."""

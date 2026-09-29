@@ -269,6 +269,8 @@ def test_stale_cover_page_shares_fall_back_to_diluted_weighted_average():
     f = parse_company_facts(facts, ticker="MA")
 
     assert f.shares == pytest.approx(905_000_000)
+    # weighted-average counts are restated for splits before issuance: basis = filing date
+    assert f.shares_as_of == date(2025, 8, 1)
 
 
 def test_annual_value_from_10k_beats_later_10q_retag():
@@ -367,3 +369,26 @@ def test_five_year_margin_is_robust_to_extraordinary_years():
 def test_five_year_margin_needs_three_years():
     f = parse_company_facts(_facts(), ticker="X")  # only one fiscal year of operating income
     assert f.operating_margin_5y is None
+
+
+def test_share_count_records_when_it_was_measured():
+    # Needed to split-adjust: a count measured before a split must be converted
+    # even when the split happened before the valuation date.
+    f = parse_company_facts(_facts(), ticker="EXM")
+    assert f.shares_as_of == date(2025, 7, 20)
+
+
+def test_balance_sheet_share_count_is_the_next_fallback():
+    # GOOGL: cover and weighted-average counts are per class (omitted by companyfacts);
+    # the balance sheet reports the all-class total.
+    facts = _facts()
+    facts["facts"]["dei"]["EntityCommonStockSharesOutstanding"] = _concept(
+        _e(None, "2012-01-20", 330_000_000, filed="2012-02-01"), unit="shares")
+    facts["facts"]["us-gaap"]["CommonStockSharesOutstanding"] = _concept(
+        _e(None, "2024-12-31", 12_400_000_000, filed="2025-02-01", form="10-K"),
+        _e(None, "2025-06-30", 12_230_000_000, filed="2025-08-01"), unit="shares")
+
+    f = parse_company_facts(facts, ticker="GOOGL")
+
+    assert f.shares == pytest.approx(12_230_000_000)
+    assert f.shares_as_of == date(2025, 8, 1)  # restated for splits before issuance
