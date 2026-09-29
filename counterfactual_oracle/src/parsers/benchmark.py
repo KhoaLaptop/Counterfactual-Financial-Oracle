@@ -23,7 +23,8 @@ import sys
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import date, timedelta
-from typing import Callable, Dict, List, Optional
+from pathlib import Path
+from typing import Callable, Dict, List, Optional, Tuple
 
 from ..models import FinancialReport
 from ..valuation.edgar import CAPEX_TAGS, CASH_TAGS, OPERATING_INCOME_TAGS, REVENUE_TAGS, merged_entries
@@ -239,32 +240,64 @@ def summarize(runs: List[Dict[str, ExtractorResult]]) -> Dict[str, Dict]:
     return summary
 
 
+# --- manifest runs ----------------------------------------------------------------
+
+def run_manifest(
+    cases: List[Dict],
+    sec,
+    extractors: Dict,
+    on_filing: Optional[Callable[[Dict], None]] = None,
+) -> Tuple[List[Dict], List[Dict[str, ExtractorResult]]]:
+    """Benchmark every filing; one failing filing is recorded and skipped, not fatal."""
+    filings, runs = [], []
+    for case in cases:
+        form = case.get("form", "10-Q")
+        try:
+            truth = edgar_truth(sec.company_facts(case["ticker"]), date.fromisoformat(case["period_end"]), form)
+            run = run_benchmark(case["pdf"], extractors, truth, form)
+        except Exception as exc:
+            filing = {**case, "error": f"{type(exc).__name__}: {exc}"}
+        else:
+            runs.append(run)
+            filing = {**case, "results": {name: asdict(r) for name, r in run.items()}}
+        filings.append(filing)
+        if on_filing:
+            on_filing(filing)
+    return filings, runs
+
+
 # --- CLI --------------------------------------------------------------------------
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Score PDF extractors against SEC XBRL.")
     parser.add_argument("--manifest", required=True, help="JSON list of {pdf, ticker, period_end, form}")
     parser.add_argument("--extractors", default="docling", help="Comma-separated: docling,mistral,landing_ai")
+    parser.add_argument("--out", help="Also write results here, updated after every filing")
     args = parser.parse_args(argv)
 
+    from ..valuation.cli import DEFAULT_CACHE_DIR
     from ..valuation.edgar import SecClient
     from .extractors import create_extractor
 
-    cases = json.loads(open(args.manifest).read())
+    cases = json.loads(Path(args.manifest).read_text())
     extractors = {name: create_extractor(name) for name in args.extractors.split(",")}
-    sec = SecClient()
+    sec = SecClient(cache_dir=DEFAULT_CACHE_DIR)
+    done: List[Dict] = []
 
-    filings, runs = [], []
-    for case in cases:
-        period_end = date.fromisoformat(case["period_end"])
-        truth = edgar_truth(sec.company_facts(case["ticker"]), period_end, case.get("form", "10-Q"))
-        run = run_benchmark(case["pdf"], extractors, truth, case.get("form", "10-Q"))
-        runs.append(run)
-        filings.append({**case, "results": {name: asdict(r) for name, r in run.items()}})
-        print(f"{case['ticker']} {case['period_end']}: "
-              + ", ".join(f"{n} {r.accuracy:.0%}" for n, r in run.items()), file=sys.stderr)
+    def report(filing: Dict) -> None:
+        done.append(filing)
+        status = filing.get("error") or ", ".join(
+            f"{n} {r['accuracy']:.0%}" for n, r in filing["results"].items()
+        )
+        print(f"{filing['ticker']} {filing['period_end']}: {status}", file=sys.stderr)
+        if args.out:
+            Path(args.out).write_text(json.dumps({"filings": done}, indent=2))
 
-    print(json.dumps({"summary": summarize(runs), "filings": filings}, indent=2))
+    filings, runs = run_manifest(cases, sec, extractors, on_filing=report)
+    output = json.dumps({"summary": summarize(runs), "filings": filings}, indent=2)
+    if args.out:
+        Path(args.out).write_text(output)
+    print(output)
     return 0
 
 

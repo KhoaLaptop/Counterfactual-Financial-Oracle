@@ -246,15 +246,44 @@ class SecClient:
         )
 
 
-def _http_fetcher(user_agent: Optional[str], cache_dir: Optional[Path], ttl: int) -> Callable[[str], Dict]:
+RETRY_STATUSES = {429, 500, 502, 503, 504}
+
+
+def _http_fetcher(
+    user_agent: Optional[str],
+    cache_dir: Optional[Path],
+    ttl: int,
+    session=None,
+    retries: int = 3,
+    backoff_seconds: float = 1.0,
+    sleep: Callable[[float], None] = time.sleep,
+) -> Callable[[str], Dict]:
     if not user_agent:
         raise ValueError("SEC requires a contact User-Agent: set SEC_USER_AGENT='Name email@example.com'")
     import requests
 
-    session = requests.Session()
+    if session is None:
+        session = requests.Session()
     session.headers.update({"User-Agent": user_agent, "Accept-Encoding": "gzip, deflate"})
     min_interval = 0.12  # SEC allows 10 requests/second
     last_call = [0.0]
+
+    def get_with_retries(url: str):
+        for attempt in range(retries + 1):
+            wait = min_interval - (time.monotonic() - last_call[0])
+            if wait > 0:
+                sleep(wait)
+            last_call[0] = time.monotonic()
+            try:
+                response = session.get(url, timeout=30)
+            except (requests.ConnectionError, requests.Timeout):
+                if attempt == retries:
+                    raise
+            else:
+                if response.status_code not in RETRY_STATUSES or attempt == retries:
+                    response.raise_for_status()
+                    return response
+            sleep(backoff_seconds * 2 ** attempt)
 
     def fetch(url: str) -> Dict:
         cache_file = None
@@ -263,13 +292,7 @@ def _http_fetcher(user_agent: Optional[str], cache_dir: Optional[Path], ttl: int
             if cache_file.exists() and time.time() - cache_file.stat().st_mtime < ttl:
                 return json.loads(cache_file.read_text())
 
-        wait = min_interval - (time.monotonic() - last_call[0])
-        if wait > 0:
-            time.sleep(wait)
-        last_call[0] = time.monotonic()
-        response = session.get(url, timeout=30)
-        response.raise_for_status()
-        data = response.json()
+        data = get_with_retries(url).json()
 
         if cache_file:
             cache_file.parent.mkdir(parents=True, exist_ok=True)

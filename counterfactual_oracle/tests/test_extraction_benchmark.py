@@ -148,3 +148,26 @@ def test_summarize_aggregates_across_filings():
     assert summary["x"]["filings"] == 2
     assert summary["x"]["accuracy"] == pytest.approx((6 + 4) / 12)
     assert summary["x"]["field_accuracy"]["EBIT"] == pytest.approx(0.5)
+
+
+def test_run_manifest_records_failed_filings_and_continues():
+    from counterfactual_oracle.src.parsers.benchmark import run_manifest
+
+    class FlakySec:
+        def company_facts(self, ticker):
+            if ticker == "DOWN":
+                raise ConnectionError("SEC dropped the connection")
+            return _facts()
+
+    cases = [
+        {"pdf": "a.pdf", "ticker": "DOWN", "period_end": "2025-06-30", "form": "10-Q"},
+        {"pdf": "b.pdf", "ticker": "OK", "period_end": "2025-06-30", "form": "10-Q"},
+    ]
+    seen = []
+
+    filings, runs = run_manifest(cases, FlakySec(), {"x": FakeExtractor(GOOD_MD)}, on_filing=seen.append)
+
+    assert filings[0]["error"] == "ConnectionError: SEC dropped the connection"
+    assert filings[1]["results"]["x"]["accuracy"] == pytest.approx(1.0)
+    assert len(runs) == 1  # only successful filings count toward the summary
+    assert [f["ticker"] for f in seen] == ["DOWN", "OK"]  # progress reported as each finishes

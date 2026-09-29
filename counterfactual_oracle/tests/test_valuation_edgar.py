@@ -150,3 +150,65 @@ def test_sec_client_resolves_ticker_and_fetches_fundamentals():
 def test_sec_client_unknown_ticker():
     with pytest.raises(LookupError):
         SecClient(fetch_json=_FakeHttp()).fundamentals("NOPE")
+
+
+# --- HTTP fetcher retries -----------------------------------------------------------
+
+import requests  # noqa: E402
+
+from counterfactual_oracle.src.valuation.edgar import _http_fetcher  # noqa: E402
+
+
+class _Resp:
+    def __init__(self, status, payload=None):
+        self.status_code, self._payload = status, payload or {}
+
+    def json(self):
+        return self._payload
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"{self.status_code}")
+
+
+class _FlakySession:
+    """Returns/raises the scripted outcomes in order."""
+
+    def __init__(self, *outcomes):
+        self.outcomes = list(outcomes)
+        self.headers = {}
+        self.calls = 0
+
+    def get(self, url, timeout):
+        self.calls += 1
+        outcome = self.outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+
+def _fetcher(session):
+    return _http_fetcher("Test test@example.com", None, 0, session=session, sleep=lambda s: None)
+
+
+def test_fetcher_retries_dropped_connections_and_server_errors():
+    session = _FlakySession(requests.ConnectionError("reset"), _Resp(503), _Resp(200, {"ok": 1}))
+
+    assert _fetcher(session)("https://data.sec.gov/x.json") == {"ok": 1}
+    assert session.calls == 3
+
+
+def test_fetcher_gives_up_after_max_retries():
+    session = _FlakySession(*[requests.ConnectionError("reset")] * 4)
+
+    with pytest.raises(requests.ConnectionError):
+        _fetcher(session)("https://data.sec.gov/x.json")
+    assert session.calls == 4  # first try + 3 retries
+
+
+def test_fetcher_does_not_retry_client_errors():
+    session = _FlakySession(_Resp(404), _Resp(200))
+
+    with pytest.raises(requests.HTTPError):
+        _fetcher(session)("https://data.sec.gov/x.json")
+    assert session.calls == 1
