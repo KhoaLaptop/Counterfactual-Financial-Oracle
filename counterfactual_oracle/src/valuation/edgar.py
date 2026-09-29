@@ -83,7 +83,7 @@ def _dedupe(entries: List[Dict]) -> List[Dict]:
     return list(latest.values())
 
 
-def _merged(gaap: Dict, tags: List[str], unit: str = "USD") -> List[Dict]:
+def merged_entries(gaap: Dict, tags: List[str], unit: str = "USD") -> List[Dict]:
     """Entries across tags; on the same period an earlier tag wins."""
     merged: Dict = {}
     for tag in reversed(tags):
@@ -137,13 +137,13 @@ def _latest_annual(entries: List[Dict], on_or_before: date) -> Optional[float]:
 
 
 def _flow(gaap: Dict, tags: List[str], end: date) -> Optional[float]:
-    entries = _merged(gaap, tags)
+    entries = merged_entries(gaap, tags)
     value = flow_at(entries, end)
     return value if value is not None else _latest_annual(entries, end)
 
 
 def _instant(gaap: Dict, tags: List[str], end: date) -> Optional[float]:
-    entries = [e for e in _merged(gaap, tags) if _d(e["end"]) <= end + DATE_TOLERANCE]
+    entries = [e for e in merged_entries(gaap, tags) if _d(e["end"]) <= end + DATE_TOLERANCE]
     return float(max(entries, key=lambda e: e["end"])["val"]) if entries else None
 
 
@@ -180,7 +180,7 @@ def parse_company_facts(
     facts: Dict, ticker: str, sic: Optional[int] = None, cik: Optional[str] = None, name: str = ""
 ) -> Fundamentals:
     gaap = facts.get("facts", {}).get("us-gaap", {})
-    revenue_entries = _merged(gaap, REVENUE_TAGS)
+    revenue_entries = merged_entries(gaap, REVENUE_TAGS)
     end = _latest_flow_end(revenue_entries)
     base = Fundamentals(ticker=ticker.upper(), name=name or facts.get("entityName", ""), cik=cik, sic=sic)
     if end is None:
@@ -232,11 +232,15 @@ class SecClient:
             raise LookupError(f"Ticker {ticker!r} not found in SEC company list")
         return f"{int(row['cik_str']):010d}"
 
+    def company_facts(self, ticker: str) -> Dict:
+        """Raw XBRL companyfacts JSON for a ticker."""
+        return self._fetch(FACTS_URL.format(cik=self.cik_for(ticker)))
+
     def fundamentals(self, ticker: str) -> Fundamentals:
         cik = self.cik_for(ticker)
         submissions = self._fetch(SUBMISSIONS_URL.format(cik=cik))
         sic = submissions.get("sic")
-        facts = self._fetch(FACTS_URL.format(cik=cik))
+        facts = self.company_facts(ticker)
         return parse_company_facts(
             facts, ticker=ticker, cik=cik, sic=int(sic) if sic else None, name=submissions.get("name", ""),
         )
