@@ -171,3 +171,18 @@ def test_run_manifest_records_failed_filings_and_continues():
     assert filings[1]["results"]["x"]["accuracy"] == pytest.approx(1.0)
     assert len(runs) == 1  # only successful filings count toward the summary
     assert [f["ticker"] for f in seen] == ["DOWN", "OK"]  # progress reported as each finishes
+
+
+def test_run_manifest_flags_filings_without_xbrl_ground_truth():
+    from counterfactual_oracle.src.parsers.benchmark import run_manifest
+
+    class Sec:
+        def company_facts(self, ticker):
+            return _facts()  # has no values for the requested period
+
+    cases = [{"pdf": "a.pdf", "ticker": "KO", "period_end": "2026-07-03", "form": "10-Q"}]
+
+    filings, runs = run_manifest(cases, Sec(), {"x": FakeExtractor(GOOD_MD)})
+
+    assert "no XBRL values" in filings[0]["error"]
+    assert runs == []  # must not count as a 0% score

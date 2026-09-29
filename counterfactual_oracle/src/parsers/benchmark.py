@@ -254,6 +254,8 @@ def run_manifest(
         form = case.get("form", "10-Q")
         try:
             truth = edgar_truth(sec.company_facts(case["ticker"]), date.fromisoformat(case["period_end"]), form)
+            if not truth:
+                raise LookupError(f"no XBRL values for period ending {case['period_end']} (SEC data may lag the filing)")
             run = run_benchmark(case["pdf"], extractors, truth, form)
         except Exception as exc:
             filing = {**case, "error": f"{type(exc).__name__}: {exc}"}
