@@ -40,16 +40,43 @@ def test_deterministic_constant_growth_matches_gordon_formula():
     assert result.per_share_p10 == pytest.approx(result.per_share_p90)
 
 
-def test_growth_fades_linearly_to_terminal_rate():
+def _growth_path(result, revenue=100.0):
+    rev = np.array([revenue] + result.revenue_forecast_p50)
+    return rev[1:] / rev[:-1] - 1
+
+
+def test_default_horizon_holds_growth_then_fades_by_year_ten():
     result = simulate_fair_value(
         _assumptions(growth_start=0.30, terminal_growth_low=0.02, terminal_growth_high=0.02),
         num_simulations=10,
         seed=1,
     )
 
-    growth = np.array(result.revenue_forecast_p50[1:]) / np.array(result.revenue_forecast_p50[:-1]) - 1
-    assert result.revenue_forecast_p50[0] == pytest.approx(130.0)
-    assert growth == pytest.approx([0.23, 0.16, 0.09, 0.02])
+    growth = _growth_path(result)
+    assert len(growth) == 10
+    # hold 3 years at the starting rate, then fade linearly to terminal in year 10
+    assert growth[:3] == pytest.approx([0.30, 0.30, 0.30])
+    assert growth[3:] == pytest.approx([0.26, 0.22, 0.18, 0.14, 0.10, 0.06, 0.02])
+
+
+def test_horizon_is_configurable():
+    result = simulate_fair_value(
+        _assumptions(growth_start=0.30, terminal_growth_low=0.02, terminal_growth_high=0.02,
+                     years=5, hold_years=1),
+        num_simulations=10,
+        seed=1,
+    )
+
+    assert _growth_path(result) == pytest.approx([0.30, 0.23, 0.16, 0.09, 0.02])
+
+
+def test_terminal_value_share_is_reported():
+    result = simulate_fair_value(_assumptions(), num_simulations=10, seed=1)
+
+    # EV is 255 (Gordon); the terminal share is whatever the 10 explicit years don't cover
+    fcf = [20.4 * 1.02 ** t for t in range(10)]
+    pv_explicit = sum(f / 1.10 ** (t + 1) for t, f in enumerate(fcf))
+    assert result.terminal_value_share == pytest.approx(1 - pv_explicit / 255.0)
 
 
 def test_working_capital_scales_with_revenue_change():

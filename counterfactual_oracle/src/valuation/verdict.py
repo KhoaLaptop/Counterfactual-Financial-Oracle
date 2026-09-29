@@ -15,6 +15,7 @@ P_UPSIDE_BULL = 0.6
 P_UPSIDE_BEAR = 0.4
 CONFIDENCE_LEVELS: List[Confidence] = ["Low", "Medium", "High"]
 MISSING_FIELDS_DOWNGRADE = 2
+TERMINAL_SHARE_DOWNGRADE = 0.75
 
 
 def classify(gap: float, p_upside: float) -> Label:
@@ -34,7 +35,11 @@ def lower_confidence(a: Confidence, b: Confidence) -> Confidence:
 
 
 def quantitative_confidence(
-    p10: float, p90: float, price: float, missing_fields: List[str]
+    p10: float,
+    p90: float,
+    price: float,
+    missing_fields: List[str],
+    terminal_value_share: Optional[float] = None,
 ) -> Tuple[Confidence, List[str]]:
     spread = (p90 - p10) / price
     level: Confidence = "High" if spread < 0.5 else "Medium" if spread < 1.0 else "Low"
@@ -42,6 +47,9 @@ def quantitative_confidence(
     if len(missing_fields) >= MISSING_FIELDS_DOWNGRADE:
         level = _downgrade(level)
         reasons.append(f"{len(missing_fields)} inputs missing: {', '.join(missing_fields)}")
+    if terminal_value_share is not None and terminal_value_share > TERMINAL_SHARE_DOWNGRADE:
+        level = _downgrade(level)
+        reasons.append(f"Terminal value is {terminal_value_share:.0%} of enterprise value")
     return level, reasons
 
 
@@ -86,7 +94,9 @@ def evaluate(
 
     gap = dist.per_share_p50 / m.price - 1
     p_upside = float(np.mean(dist.per_share_samples > m.price))
-    confidence, reasons = quantitative_confidence(dist.per_share_p10, dist.per_share_p90, m.price, missing)
+    confidence, reasons = quantitative_confidence(
+        dist.per_share_p10, dist.per_share_p90, m.price, missing, dist.terminal_value_share,
+    )
 
     return Verdict(
         label=classify(gap, p_upside),
@@ -105,6 +115,9 @@ def evaluate(
             "wacc": assumptions.wacc,
             "terminal_growth_low": assumptions.terminal_growth_low,
             "terminal_growth_high": assumptions.terminal_growth_high,
+            "horizon_years": assumptions.years,
+            "hold_years": assumptions.hold_years,
+            "terminal_value_share": dist.terminal_value_share,
             "net_debt": assumptions.net_debt,
             "shares": assumptions.shares,
         },

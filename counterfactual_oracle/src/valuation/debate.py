@@ -17,6 +17,9 @@ from ..models import (
 )
 from .models import Confidence, DebateReview, Fundamentals, Verdict
 
+# The legacy debate prompts present a 5-year forecast table.
+DEBATE_FORECAST_YEARS = 5
+
 
 class Reviewer(Protocol):
     def review(self, fundamentals: Fundamentals, verdict: Verdict) -> DebateReview: ...
@@ -60,14 +63,20 @@ def to_aggregated_simulation(verdict: Verdict) -> AggregatedSimulation:
         return per_share * shares + net_debt
 
     fv = verdict.fair_value
+    revenue = verdict.revenue_forecast_p50[:DEBATE_FORECAST_YEARS]
+    fcf = verdict.fcf_forecast_p50[:DEBATE_FORECAST_YEARS]
+    horizon = int(verdict.assumptions.get("horizon_years", len(verdict.revenue_forecast_p50)))
     return AggregatedSimulation(
         median_npv=ev(fv.p50), p10_npv=ev(fv.p10), p90_npv=ev(fv.p90),
-        median_revenue=verdict.revenue_forecast_p50[0], median_ebitda=0.0, median_fcf=verdict.fcf_forecast_p50[0],
-        revenue_forecast_p50=verdict.revenue_forecast_p50,
-        ebitda_forecast_p50=[0.0] * len(verdict.revenue_forecast_p50),
-        fcf_forecast_p50=verdict.fcf_forecast_p50,
+        median_revenue=revenue[0], median_ebitda=0.0, median_fcf=fcf[0],
+        revenue_forecast_p50=revenue,
+        ebitda_forecast_p50=[0.0] * len(revenue),
+        fcf_forecast_p50=fcf,
         assumption_log=[f"{k}: {v:,.4g}" for k, v in verdict.assumptions.items()],
-        traceability={"FairValue": "(EV - net debt) / shares", "EV": "5y FCF DCF + Gordon terminal value"},
+        traceability={
+            "FairValue": "(EV - net debt) / shares",
+            "EV": f"{horizon}y FCF DCF + Gordon terminal value (first {DEBATE_FORECAST_YEARS}y shown)",
+        },
         simulation_runs=[],
     )
 

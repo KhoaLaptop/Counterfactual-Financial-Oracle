@@ -2,7 +2,8 @@
 Vectorized Monte Carlo DCF producing a per-share fair-value distribution.
 
 MODEL (per simulated path):
-    g_t      = g0 + (gT - g0) * (t - 1) / (years - 1)      growth fades to terminal by the last year
+    g_t      = g0                                           for t <= hold_years
+             = g0 + (gT - g0) * (t - hold) / (years - hold)  fading to terminal in the last year
     Rev_t    = Rev_{t-1} * (1 + g_t)
     FCF_t    = Rev_t * (m * (1 - tax) + da - capex) - wc * (Rev_t - Rev_{t-1})
     TV       = FCF_T * (1 + gT) / (r - gT)
@@ -39,7 +40,8 @@ class ValuationAssumptions:
     wacc_sigma: float
     net_debt: float
     shares: float
-    years: int = 5
+    years: int = 10
+    hold_years: int = 3
 
 
 @dataclass
@@ -47,6 +49,7 @@ class FairValueDistribution:
     per_share_samples: np.ndarray
     wacc_samples: np.ndarray
     enterprise_value_p50: float
+    terminal_value_share: float  # median PV(terminal value) / EV
     per_share_p10: float
     per_share_p50: float
     per_share_p90: float
@@ -65,8 +68,9 @@ def simulate_fair_value(
     margin = rng.normal(a.ebit_margin, a.margin_sigma, n)
     wacc = np.maximum(rng.normal(a.wacc, a.wacc_sigma, n), g_term + MIN_WACC_SPREAD)
 
-    # (n, years) growth path fading linearly from g0 to g_term
-    fade = np.arange(years) / max(years - 1, 1)
+    # (n, years) growth path: hold g0, then fade linearly to g_term by the last year
+    t = np.arange(1, years + 1)
+    fade = np.clip((t - a.hold_years) / max(years - a.hold_years, 1), 0.0, 1.0)
     growth = g0[:, None] + (g_term - g0)[:, None] * fade[None, :]
 
     revenue = a.revenue * np.cumprod(1 + growth, axis=1)
@@ -76,7 +80,8 @@ def simulate_fair_value(
 
     discount = (1 + wacc)[:, None] ** np.arange(1, years + 1)[None, :]
     terminal_value = fcf[:, -1] * (1 + g_term) / (wacc - g_term)
-    enterprise_value = (fcf / discount).sum(axis=1) + terminal_value / discount[:, -1]
+    pv_terminal = terminal_value / discount[:, -1]
+    enterprise_value = (fcf / discount).sum(axis=1) + pv_terminal
     per_share = (enterprise_value - a.net_debt) / a.shares
 
     p10, p50, p90 = np.percentile(per_share, [10, 50, 90])
@@ -84,6 +89,7 @@ def simulate_fair_value(
         per_share_samples=per_share,
         wacc_samples=wacc,
         enterprise_value_p50=float(np.median(enterprise_value)),
+        terminal_value_share=float(np.median(pv_terminal / enterprise_value)),
         per_share_p10=float(p10),
         per_share_p50=float(p50),
         per_share_p90=float(p90),

@@ -112,6 +112,18 @@ def test_quantitative_confidence(p10, p90, missing, expected):
     assert level == expected
 
 
+def test_confidence_drops_when_terminal_value_dominates():
+    level, reasons = quantitative_confidence(90, 130, price=100.0, missing_fields=[], terminal_value_share=0.8)
+
+    assert level == "Medium"
+    assert any("terminal value" in r.lower() for r in reasons)
+
+
+def test_verdict_reports_terminal_value_share():
+    verdict = evaluate(_fundamentals(), _market(), num_simulations=1000, seed=1)
+    assert 0.0 < verdict.assumptions["terminal_value_share"] < 1.0
+
+
 # --- end-to-end verdict -----------------------------------------------------
 
 def test_evaluate_returns_verdict_consistent_with_distribution():
