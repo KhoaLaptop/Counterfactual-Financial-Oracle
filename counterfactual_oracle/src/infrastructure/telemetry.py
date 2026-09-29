@@ -8,7 +8,6 @@ from prometheus_client import Counter, Histogram, Gauge, CollectorRegistry
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.jaeger.thrift import JaegerExporter
 from opentelemetry.sdk.resources import Resource, SERVICE_NAME
 
 from ..config import settings
@@ -115,6 +114,9 @@ def setup_telemetry():
     trace.set_tracer_provider(provider)
     
     if settings.jaeger_endpoint:
+        # Deprecated exporter with undeclared deps: only import when actually configured.
+        from opentelemetry.exporter.jaeger.thrift import JaegerExporter
+
         jaeger_exporter = JaegerExporter(
             agent_host_name=settings.jaeger_endpoint,
             agent_port=6831,
