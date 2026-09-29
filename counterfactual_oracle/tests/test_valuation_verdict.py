@@ -61,8 +61,10 @@ def test_growth_start_is_capped():
 
 def test_wacc_uses_capm_and_after_tax_cost_of_debt():
     a, _ = build_assumptions(_fundamentals(), _market())
-    # Re = 4% + 1.2 * 5% = 10%; E = 8 * 100 = 800, D = 200, Rd = 10/200 = 5%, tax = 20%
-    assert a.wacc == pytest.approx(0.8 * 0.10 + 0.2 * 0.05 * 0.8)
+    # Blume beta = 0.67 * 1.2 + 0.33; Re = 4% + beta * 5%; E = 8 * 100 = 800, D = 200,
+    # Rd = 10/200 = 5%, tax = 20%
+    cost_of_equity = 0.04 + (0.67 * 1.2 + 0.33) * 0.05
+    assert a.wacc == pytest.approx(0.8 * cost_of_equity + 0.2 * 0.05 * 0.8)
 
 
 def test_missing_optionals_fall_back_and_are_reported():
@@ -202,3 +204,32 @@ def test_investment_phase_lowers_confidence():
 def test_builder_fades_capex():
     a, _ = build_assumptions(_fundamentals(capex=300.0), _market())
     assert a.capex_fade
+
+
+def test_wacc_uses_blume_adjusted_beta():
+    # Blume: 0.67 * raw + 0.33 * 1.0, damping noisy historical betas toward the market.
+    raw_beta = 0.9
+    a, _ = build_assumptions(_fundamentals(total_debt=0.0, interest_expense=0.0), _market(beta=raw_beta))
+    assert a.wacc == pytest.approx(0.04 + (0.67 * raw_beta + 0.33) * 0.05)
+
+
+def test_growth_jump_uses_the_lower_of_recent_and_three_year_rates():
+    # AMCR-style: a merger lifts reported revenue +40% while the business grows ~5%.
+    f = _fundamentals(revenue=1400.0, revenue_prior=1000.0, revenue_3y_ago=1200.0)
+    a, _ = build_assumptions(f, _market())
+
+    assert a.growth_start == pytest.approx((1400 / 1200) ** (1 / 3) - 1)
+
+
+def test_growth_jump_is_explained_in_the_verdict():
+    f = _fundamentals(revenue=1400.0, revenue_prior=1000.0, revenue_3y_ago=1200.0)
+    verdict = evaluate(f, _market(price=2.0), num_simulations=500)
+    assert any("acquisition" in r.lower() for r in verdict.confidence_reasons)
+
+
+def test_high_leverage_lowers_confidence():
+    # CHTR-style: net debt several times the market value of equity.
+    level, reasons = quantitative_confidence(90, 130, price=100.0, missing_fields=[], leverage=6.9)
+
+    assert level == "Medium"
+    assert any("leverage" in r.lower() for r in reasons)

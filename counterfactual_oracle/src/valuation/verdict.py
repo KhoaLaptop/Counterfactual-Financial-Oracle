@@ -6,7 +6,7 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 
-from .assumptions import build_assumptions
+from .assumptions import build_assumptions, growth_jump
 from .dcf import simulate_fair_value
 from .models import Confidence, DebateReview, FairValue, Fundamentals, Label, MarketSnapshot, Verdict
 
@@ -17,6 +17,7 @@ CONFIDENCE_LEVELS: List[Confidence] = ["Low", "Medium", "High"]
 MISSING_FIELDS_DOWNGRADE = 2
 TERMINAL_SHARE_DOWNGRADE = 0.75
 INVESTMENT_PHASE_CAPEX_TO_DA = 2.0
+HIGH_LEVERAGE = 3.0  # net debt / market value of equity
 
 
 def classify(gap: float, p_upside: float) -> Label:
@@ -42,6 +43,7 @@ def quantitative_confidence(
     missing_fields: List[str],
     terminal_value_share: Optional[float] = None,
     capex_to_da: Optional[float] = None,
+    leverage: Optional[float] = None,
 ) -> Tuple[Confidence, List[str]]:
     spread = (p90 - p10) / price
     level: Confidence = "High" if spread < 0.5 else "Medium" if spread < 1.0 else "Low"
@@ -55,6 +57,9 @@ def quantitative_confidence(
     if capex_to_da is not None and capex_to_da > INVESTMENT_PHASE_CAPEX_TO_DA:
         level = _downgrade(level)
         reasons.append(f"Investment phase: capex is {capex_to_da:.1f}x depreciation, assumed to fade by year 10")
+    if leverage is not None and leverage > HIGH_LEVERAGE:
+        level = _downgrade(level)
+        reasons.append(f"High leverage: net debt is {leverage:.1f}x the market value of equity")
     return level, reasons
 
 
@@ -103,7 +108,10 @@ def evaluate(
     confidence, reasons = quantitative_confidence(
         dist.per_share_p10, dist.per_share_p90, m.price, missing, dist.terminal_value_share,
         assumptions.capex_pct / assumptions.da_pct if assumptions.da_pct > 0 else None,
+        assumptions.net_debt / (m.price * assumptions.shares),
     )
+    if growth_jump(f):
+        reasons.append("Revenue growth jumped vs its 3-year trend (acquisition?); using the lower rate")
     if f.data_note:
         reasons.append(f.data_note)
 

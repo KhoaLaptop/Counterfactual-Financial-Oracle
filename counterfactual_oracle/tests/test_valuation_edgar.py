@@ -253,3 +253,80 @@ def test_as_of_ignores_filings_made_later():
     assert f.period_end == date(2024, 12, 31)
     assert f.basis == "FY"
     assert f.revenue == pytest.approx(1000)
+
+
+# --- S&P 500 scan data-quality cases -----------------------------------------------
+
+def test_stale_cover_page_shares_fall_back_to_diluted_weighted_average():
+    # MA/FOX/CMCSA: the undimensioned cover-page share count stopped years ago
+    # (multi-class filers now tag it per class, which companyfacts omits).
+    facts = _facts()
+    facts["facts"]["dei"]["EntityCommonStockSharesOutstanding"] = _concept(
+        _e(None, "2010-10-27", 122_500_000, filed="2010-11-02"), unit="shares")
+    facts["facts"]["us-gaap"]["WeightedAverageNumberOfDilutedSharesOutstanding"] = _concept(
+        _e("2025-04-01", "2025-06-30", 905_000_000), unit="shares")
+
+    f = parse_company_facts(facts, ticker="MA")
+
+    assert f.shares == pytest.approx(905_000_000)
+
+
+def test_annual_value_from_10k_beats_later_10q_retag():
+    # FIX: a 10-Q re-tagged the full year with a different (wrong) value after the 10-K.
+    facts = _facts()
+    revenue = facts["facts"]["us-gaap"]["RevenueFromContractWithCustomerExcludingAssessedTax"]["units"]["USD"]
+    revenue.append(_e("2024-01-01", "2024-12-31", 180, filed="2025-09-01", form="10-Q"))
+
+    f = parse_company_facts(facts, ticker="FIX")
+
+    assert f.revenue == pytest.approx(1000 + 550 - 480)
+
+
+def test_stale_annual_fallback_is_not_used():
+    # KLAC-style: operating income not tagged recently; a years-old annual must not stand in.
+    facts = _facts()
+    facts["facts"]["us-gaap"]["OperatingIncomeLoss"] = _concept(
+        _e("2019-01-01", "2019-12-31", 77, form="10-K", filed="2020-02-01"))
+
+    f = parse_company_facts(facts, ticker="KLAC")
+
+    assert f.operating_income is None
+
+
+def test_capex_sums_ppe_software_and_oil_and_gas_spending():
+    # FIS/GPN capitalize software; E&Ps (EOG, FANG) tag drilling spend as oil & gas property.
+    facts = _facts()
+    gaap = facts["facts"]["us-gaap"]
+    gaap["PaymentsToDevelopSoftware"] = _concept(_e("2024-01-01", "2024-12-31", 25, form="10-K"))
+    gaap["PaymentsToAcquireOilAndGasPropertyAndEquipment"] = _concept(_e("2024-01-01", "2024-12-31", 15, form="10-K"))
+
+    assert parse_company_facts(facts, ticker="X").capex == pytest.approx(60 + 25 + 15)
+
+
+def test_capex_total_tag_is_not_double_counted():
+    facts = _facts()
+    gaap = facts["facts"]["us-gaap"]
+    gaap["PaymentsToAcquireProductiveAssets"] = _concept(_e("2024-01-01", "2024-12-31", 90, form="10-K"))
+    gaap["PaymentsToDevelopSoftware"] = _concept(_e("2024-01-01", "2024-12-31", 25, form="10-K"))
+
+    assert parse_company_facts(facts, ticker="X").capex == pytest.approx(90)
+
+
+def test_debt_uses_current_debt_and_lease_inclusive_tags():
+    facts = _facts()
+    gaap = facts["facts"]["us-gaap"]
+    del gaap["LongTermDebt"]
+    gaap["LongTermDebtAndCapitalLeaseObligations"] = _concept(_e(None, "2025-06-30", 250))
+    gaap["DebtCurrent"] = _concept(_e(None, "2025-06-30", 40))
+
+    assert parse_company_facts(facts, ticker="VZ").total_debt == pytest.approx(290)
+
+
+def test_stale_balance_sheet_values_are_not_used():
+    # CMCSA-style: a debt tag last reported years ago must not stand in for today's debt.
+    facts = _facts()
+    gaap = facts["facts"]["us-gaap"]
+    gaap["LongTermDebt"] = _concept(_e(None, "2012-12-31", 5, filed="2013-02-01"))
+    gaap["LongTermDebtNoncurrent"] = _concept(_e(None, "2025-06-30", 900))
+
+    assert parse_company_facts(facts, ticker="CMCSA").total_debt == pytest.approx(900)

@@ -25,6 +25,8 @@ SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik}.json"
 DATE_TOLERANCE = timedelta(days=7)
 ANNUAL_DAYS = (350, 380)
 NEARBY_ANNUAL = timedelta(days=183)
+STALE_AFTER = timedelta(days=450)  # older values don't describe the current business
+ANNUAL_FORMS = ("10-K", "20-F", "40-F")
 
 # Tags in priority order; companies switch tags over the years, so they're merged.
 REVENUE_TAGS = [
@@ -41,6 +43,14 @@ DA_TAGS = [
     "Depreciation",
 ]
 CAPEX_TAGS = ["PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets"]
+# Capital spending: a total tag if reported, else the sum of component groups
+# (first tag found per group). Software and oil & gas development are real capex.
+CAPEX_TOTAL_TAGS = ["PaymentsToAcquireProductiveAssets"]
+CAPEX_COMPONENT_TAGS = [
+    ["PaymentsToAcquirePropertyPlantAndEquipment"],
+    ["PaymentsToDevelopSoftware", "PaymentsToAcquireSoftware"],
+    ["PaymentsToAcquireOilAndGasPropertyAndEquipment", "PaymentsToExploreAndDevelopOilAndGasProperties"],
+]
 WORKING_CAPITAL_TAGS = ["IncreaseDecreaseInOperatingCapital"]
 TAX_TAGS = ["IncomeTaxExpenseBenefit"]
 PRETAX_TAGS = [
@@ -77,9 +87,16 @@ def _is_annual(e: Dict) -> bool:
 
 
 def _dedupe(entries: List[Dict]) -> List[Dict]:
-    """One entry per (start, end): the most recently filed."""
+    """
+    One entry per (start, end): the most recently filed, except that for a
+    full-year period an annual report (10-K) beats later quarterly re-tags.
+    """
+    def rank(e: Dict):
+        from_annual_report = "start" in e and _is_annual(e) and e.get("form", "").startswith(ANNUAL_FORMS)
+        return (from_annual_report, e.get("filed", ""))
+
     latest: Dict = {}
-    for e in sorted(entries, key=lambda e: e.get("filed", "")):
+    for e in sorted(entries, key=rank):
         latest[(e.get("start"), e["end"])] = e
     return list(latest.values())
 
@@ -133,7 +150,11 @@ def _annual_near(entries: List[Dict], target: date, window: timedelta) -> Option
 
 
 def _latest_annual(entries: List[Dict], on_or_before: date) -> Optional[float]:
-    annuals = [e for e in entries if "start" in e and _is_annual(e) and _d(e["end"]) <= on_or_before + DATE_TOLERANCE]
+    annuals = [
+        e for e in entries
+        if "start" in e and _is_annual(e)
+        and on_or_before - STALE_AFTER <= _d(e["end"]) <= on_or_before + DATE_TOLERANCE
+    ]
     return float(max(annuals, key=lambda e: e["end"])["val"]) if annuals else None
 
 
@@ -143,8 +164,19 @@ def _flow(gaap: Dict, tags: List[str], end: date) -> Optional[float]:
     return value if value is not None else _latest_annual(entries, end)
 
 
+def _capex(gaap: Dict, end: date) -> Optional[float]:
+    total = _flow(gaap, CAPEX_TOTAL_TAGS, end)
+    if total is not None:
+        return total
+    return _sum_present(*(_flow(gaap, group, end) for group in CAPEX_COMPONENT_TAGS))
+
+
 def _instant(gaap: Dict, tags: List[str], end: date) -> Optional[float]:
-    entries = [e for e in merged_entries(gaap, tags) if _d(e["end"]) <= end + DATE_TOLERANCE]
+    """Latest balance-sheet value on or before `end`, ignoring stale ones."""
+    entries = [
+        e for e in merged_entries(gaap, tags)
+        if end - STALE_AFTER <= _d(e["end"]) <= end + DATE_TOLERANCE
+    ]
     return float(max(entries, key=lambda e: e["end"])["val"]) if entries else None
 
 
@@ -153,19 +185,38 @@ def _sum_present(*values: Optional[float]) -> Optional[float]:
     return sum(present) if present else None
 
 
+TOTAL_LONG_TERM_DEBT_TAGS = [  # include the current portion of long-term debt
+    "LongTermDebt",
+    "LongTermDebtAndCapitalLeaseObligationsIncludingCurrentMaturities",
+    "DebtLongtermAndShorttermCombinedAmount",
+]
+NONCURRENT_DEBT_TAGS = ["LongTermDebtNoncurrent", "LongTermDebtAndCapitalLeaseObligations"]
+CURRENT_LTD_TAGS = ["LongTermDebtCurrent", "LongTermDebtAndCapitalLeaseObligationsCurrent"]
+ALL_CURRENT_DEBT_TAGS = ["DebtCurrent"]  # current LTD + short-term borrowings + commercial paper
+
+
 def _total_debt(gaap: Dict, end: date) -> Optional[float]:
-    long_term = _instant(gaap, ["LongTermDebt"], end)
-    if long_term is None:
-        long_term = _sum_present(
-            _instant(gaap, ["LongTermDebtNoncurrent"], end),
-            _instant(gaap, ["LongTermDebtCurrent"], end),
-        )
     short_term = _sum_present(*(_instant(gaap, [t], end) for t in SHORT_TERM_DEBT_TAGS))
-    return _sum_present(long_term, short_term)
+    total_long = _instant(gaap, TOTAL_LONG_TERM_DEBT_TAGS, end)
+    if total_long is not None:
+        return _sum_present(total_long, short_term)
+
+    noncurrent = _instant(gaap, NONCURRENT_DEBT_TAGS, end)
+    all_current = _instant(gaap, ALL_CURRENT_DEBT_TAGS, end)
+    if all_current is not None:
+        return _sum_present(noncurrent, all_current)
+    return _sum_present(noncurrent, _instant(gaap, CURRENT_LTD_TAGS, end), short_term)
 
 
-def _shares(facts: Dict) -> Optional[float]:
+def _shares(facts: Dict, period_end: Optional[date] = None) -> Optional[float]:
+    """
+    Shares from the latest cover page, unless that value is stale: multi-class filers
+    tag cover shares per class, which companyfacts omits, leaving years-old totals.
+    Otherwise the latest diluted weighted-average count (all classes).
+    """
     cover = facts.get("dei", {}).get("EntityCommonStockSharesOutstanding", {}).get("units", {}).get("shares", [])
+    if period_end is not None:
+        cover = [e for e in cover if _d(e["end"]) >= period_end - STALE_AFTER]
     if cover:
         latest_end = max(e["end"] for e in cover)
         at_end = [e for e in cover if e["end"] == latest_end]
@@ -237,14 +288,14 @@ def parse_company_facts(
         revenue_3y_ago=revenue_near(3),
         operating_income=operating_income,
         depreciation_amortization=_flow(gaap, DA_TAGS, end),
-        capex=_flow(gaap, CAPEX_TAGS, end),
+        capex=_capex(gaap, end),
         change_in_working_capital=_flow(gaap, WORKING_CAPITAL_TAGS, end),
         income_tax=_flow(gaap, TAX_TAGS, end),
         pretax_income=pretax,
         interest_expense=interest,
         cash=_sum_present(_instant(gaap, CASH_TAGS, end), _instant(gaap, SHORT_TERM_INVESTMENT_TAGS, end)),
         total_debt=_total_debt(gaap, end),
-        shares=_shares(facts.get("facts", {})),
+        shares=_shares(facts.get("facts", {}), end),
         data_note="; ".join(notes),
     ))
 

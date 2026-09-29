@@ -44,7 +44,7 @@ def main(argv: Optional[List[str]] = None, oracle: Optional[Oracle] = None) -> i
     if oracle is None:
         from .cli import _live_oracle
 
-        oracle = _live_oracle(reviewer=None)
+        oracle = _live_oracle(tickers)
 
     def progress(done: int, total: int, ticker: str) -> None:
         print(f"[{done}/{total}] {ticker}", file=sys.stderr)

@@ -11,10 +11,12 @@ from .models import Fundamentals, MarketSnapshot
 
 EQUITY_RISK_PREMIUM = 0.05
 DEFAULT_BETA = 1.0
+BLUME_WEIGHT = 0.67
 DEFAULT_TAX_RATE = 0.21
 DEFAULT_WC_PCT = 0.05
 GROWTH_CAP = (-0.20, 0.40)
 RECENT_GROWTH_WEIGHT = 0.7
+GROWTH_JUMP = 0.15  # recent vs 3-year growth gap that signals acquisitions or one-offs
 WACC_BOUNDS = (0.05, 0.16)
 WACC_SIGMA = 0.01
 TERMINAL_GROWTH = (0.015, 0.03)
@@ -33,14 +35,28 @@ def _ratio(num: Optional[float], den: Optional[float]) -> Optional[float]:
     return num / den
 
 
-def _growth_start(f: Fundamentals) -> float:
+def _growth_rates(f: Fundamentals) -> Tuple[float, Optional[float]]:
     recent = _ratio(f.revenue, f.revenue_prior)
     recent = recent - 1 if recent is not None else 0.03
-    cagr = _ratio(f.revenue, f.revenue_3y_ago)
-    if cagr is not None and cagr > 0:
-        g = RECENT_GROWTH_WEIGHT * recent + (1 - RECENT_GROWTH_WEIGHT) * (cagr ** (1 / 3) - 1)
-    else:
+    ratio = _ratio(f.revenue, f.revenue_3y_ago)
+    cagr = ratio ** (1 / 3) - 1 if ratio is not None and ratio > 0 else None
+    return recent, cagr
+
+
+def growth_jump(f: Fundamentals) -> bool:
+    """Recent growth far from the 3-year trend: likely an acquisition or a one-off."""
+    recent, cagr = _growth_rates(f)
+    return cagr is not None and abs(recent - cagr) > GROWTH_JUMP
+
+
+def _growth_start(f: Fundamentals) -> float:
+    recent, cagr = _growth_rates(f)
+    if cagr is None:
         g = recent
+    elif growth_jump(f):
+        g = min(recent, cagr)  # don't project a merger-sized jump as organic growth
+    else:
+        g = RECENT_GROWTH_WEIGHT * recent + (1 - RECENT_GROWTH_WEIGHT) * cagr
     return float(np.clip(g, *GROWTH_CAP))
 
 
@@ -52,7 +68,9 @@ def _tax_rate(f: Fundamentals) -> float:
 
 
 def _wacc(f: Fundamentals, m: MarketSnapshot, shares: float, tax_rate: float) -> float:
-    beta = float(np.clip(m.beta if m.beta is not None else DEFAULT_BETA, 0.5, 2.5))
+    raw_beta = m.beta if m.beta is not None else DEFAULT_BETA
+    # Blume adjustment damps noisy historical estimates toward the market beta of 1.
+    beta = float(np.clip(BLUME_WEIGHT * raw_beta + (1 - BLUME_WEIGHT) * 1.0, 0.5, 2.5))
     cost_of_equity = m.risk_free_rate + beta * EQUITY_RISK_PREMIUM
 
     debt = f.total_debt or 0.0

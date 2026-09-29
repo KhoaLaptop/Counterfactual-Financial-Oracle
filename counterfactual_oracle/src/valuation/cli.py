@@ -6,6 +6,7 @@ Command line: print a single-company verdict as JSON.
     python -m counterfactual_oracle.src.valuation --report filing.json --price 180 --shares 24.3e9 --scale 1e6 --quarterly
 
 Ticker mode needs SEC_USER_AGENT ("Name email@example.com") and the yfinance package.
+Beta is computed from 2 years of weekly returns against the S&P 500.
 """
 
 import argparse
@@ -49,11 +50,12 @@ def _debate_reviewer():
     return DebateAgentReviewer(DebateAgent(optimist_key, critic_key))
 
 
-def _live_oracle(reviewer) -> Oracle:
+def _live_oracle(tickers: List[str], reviewer=None) -> Oracle:
+    """SEC fundamentals (disk-cached) plus one batch market-data download for `tickers`."""
     from .edgar import SecClient
-    from .market import YFinanceMarketData
+    from .market import BatchMarketData
 
-    return Oracle(SecClient(cache_dir=DEFAULT_CACHE_DIR), YFinanceMarketData(), reviewer=reviewer)
+    return Oracle(SecClient(cache_dir=DEFAULT_CACHE_DIR), BatchMarketData(tickers), reviewer=reviewer)
 
 
 def main(argv: Optional[List[str]] = None, oracle: Optional[Oracle] = None) -> int:
@@ -75,7 +77,8 @@ def main(argv: Optional[List[str]] = None, oracle: Optional[Oracle] = None) -> i
         judge = oracle or Oracle(sec=None, market=None, reviewer=reviewer)
         verdict = judge.judge_fundamentals(fundamentals, market, args.simulations, args.seed)
     else:
-        verdict = (oracle or _live_oracle(reviewer)).judge(args.ticker, args.simulations, args.seed)
+        oracle = oracle or _live_oracle([args.ticker.upper()], reviewer)
+        verdict = oracle.judge(args.ticker.upper(), args.simulations, args.seed)
 
     print(verdict.model_dump_json(indent=2))
     return 0
