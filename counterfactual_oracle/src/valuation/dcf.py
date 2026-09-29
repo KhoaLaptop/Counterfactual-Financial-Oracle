@@ -7,7 +7,8 @@ MODEL (per simulated path):
     Rev_t    = Rev_{t-1} * (1 + g_t)
     capex_t  = capex, or with capex_fade: held, then faded (same path as growth) down to
                maintenance capex min(capex, da * (1 + gT)) by the last year
-    FCF_t    = Rev_t * (m * (1 - tax) + da - capex_t) - wc * (Rev_t - Rev_{t-1})
+    m_t      = m, or with margin_target: held, then faded (same path) to the target
+    FCF_t    = Rev_t * (m_t * (1 - tax) + da - capex_t) - wc * (Rev_t - Rev_{t-1})
     TV       = FCF_T * (1 + gT) / (r - gT)
     EV       = sum(FCF_t / (1 + r)^t) + TV / (1 + r)^T
     PerShare = max(0, (EV - net_debt) / shares)     equity can't be worth less than zero
@@ -16,7 +17,7 @@ Sampled per path: g0 ~ N, m ~ N, r ~ N (floored at gT + 1pt), gT ~ U.
 """
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 
@@ -45,6 +46,7 @@ class ValuationAssumptions:
     years: int = 10
     hold_years: int = 3
     capex_fade: bool = False  # fade today's capex intensity to maintenance level
+    margin_target: Optional[float] = None  # long-run operating margin to fade toward
 
 
 @dataclass
@@ -91,7 +93,10 @@ def simulate_fair_value(
         # Only relax peak build-out; D&A can exceed real maintenance needs (acquired intangibles).
         maintenance = np.minimum(a.da_pct * (1 + g_term), a.capex_pct)
         capex = a.capex_pct + (maintenance - a.capex_pct)[:, None] * fade[None, :]
-    operating_cash = (margin * (1 - a.tax_rate) + a.da_pct)[:, None]
+    margin_path = np.repeat(margin[:, None], years, axis=1)
+    if a.margin_target is not None:
+        margin_path = margin_path + (a.margin_target - a.ebit_margin) * fade[None, :]
+    operating_cash = margin_path * (1 - a.tax_rate) + a.da_pct
     fcf = revenue * (operating_cash - capex) - a.wc_pct * (revenue - prev_revenue)
 
     discount = (1 + wacc)[:, None] ** np.arange(1, years + 1)[None, :]

@@ -16,6 +16,8 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
+import numpy as np
+
 from .models import Fundamentals
 
 TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
@@ -164,6 +166,24 @@ def _flow(gaap: Dict, tags: List[str], end: date) -> Optional[float]:
     return value if value is not None else _latest_annual(entries, end)
 
 
+def _average_annual_margin(gaap: Dict, end: date, years: int = 5, minimum: int = 3) -> Optional[float]:
+    """
+    Median operating margin over the last `years` fiscal years (None with fewer than
+    `minimum`). A median, so extraordinary years (e.g. pandemic losses) can't dominate.
+    """
+    def annual_by_end(tags: List[str]) -> Dict[date, float]:
+        return {
+            _d(e["end"]): float(e["val"])
+            for e in merged_entries(gaap, tags)
+            if "start" in e and _is_annual(e) and _d(e["end"]) <= end + DATE_TOLERANCE
+        }
+
+    revenue = annual_by_end(REVENUE_TAGS)
+    operating = annual_by_end(OPERATING_INCOME_TAGS)
+    margins = [operating[y] / revenue[y] for y in sorted(revenue, reverse=True)[:years] if y in operating and revenue[y] > 0]
+    return float(np.median(margins)) if len(margins) >= minimum else None
+
+
 def _capex(gaap: Dict, end: date) -> Optional[float]:
     total = _flow(gaap, CAPEX_TOTAL_TAGS, end)
     if total is not None:
@@ -289,6 +309,7 @@ def parse_company_facts(
         operating_income=operating_income,
         depreciation_amortization=_flow(gaap, DA_TAGS, end),
         capex=_capex(gaap, end),
+        operating_margin_5y=_average_annual_margin(gaap, end),
         change_in_working_capital=_flow(gaap, WORKING_CAPITAL_TAGS, end),
         income_tax=_flow(gaap, TAX_TAGS, end),
         pretax_income=pretax,

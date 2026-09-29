@@ -156,3 +156,13 @@ def test_rank_cli_watchlist_prints_ranked_json(tmp_path, capsys):
     assert [e["ticker"] for e in out["entries"]] == ["CHEAP"]  # --top trims the list
     assert out["universe"] == "watchlist"
     assert [x["ticker"] for x in out["excluded"]] == ["BANK"]
+
+
+def test_zero_fair_value_ranks_last_instead_of_being_excluded():
+    class V:
+        label, price, gap_pct = "OVERVALUED", 50.0, -1.0
+
+        class fair_value:
+            p10 = p90 = 0.0
+
+    assert risk_adjusted_gap(V) == pytest.approx(-1.0 / 0.05)

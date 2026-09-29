@@ -148,3 +148,13 @@ def test_capex_below_depreciation_is_not_raised():
     rev, fcf = np.array(result.revenue_forecast_p50), np.array(result.fcf_forecast_p50)
 
     assert 0.20 + 0.08 - fcf / rev == pytest.approx(np.full(10, 0.02))
+
+
+def test_margin_fades_toward_target():
+    # tax 0, capex == D&A, no WC: FCF / revenue is exactly the operating margin.
+    result = simulate_fair_value(_assumptions(ebit_margin=0.40, margin_target=0.25), num_simulations=10, seed=1)
+    margin = np.array(result.fcf_forecast_p50) / np.array(result.revenue_forecast_p50)
+
+    assert margin[:3] == pytest.approx([0.40, 0.40, 0.40])
+    assert margin[-1] == pytest.approx(0.25)
+    assert np.all(np.diff(margin[2:]) < 0)

@@ -63,6 +63,11 @@ def quantitative_confidence(
     return level, reasons
 
 
+# Rate-regulated electric, gas-distribution, water and combined utilities. Pipelines
+# (4922) and waste services (4953) are ordinary businesses and stay assessable.
+UTILITY_SIC = {4900, 4911, 4923, 4924, 4931, 4932, 4939, 4940, 4941, 4991}
+
+
 def _is_financial(sic: Optional[int]) -> bool:
     # Banks, credit, brokers, insurers (6000-6411) and REITs (6798): FCF DCF doesn't apply.
     return sic is not None and (6000 <= sic <= 6411 or sic == 6798)
@@ -71,6 +76,8 @@ def _is_financial(sic: Optional[int]) -> bool:
 def _unfit_reason(f: Fundamentals, shares: Optional[float]) -> Optional[str]:
     if _is_financial(f.sic):
         return f"Financial company (SIC {f.sic}): free-cash-flow DCF does not apply"
+    if f.sic in UTILITY_SIC:
+        return f"Regulated utility (SIC {f.sic}): returns are set by regulators, free-cash-flow DCF does not apply"
     note = f" ({f.data_note})" if f.data_note else ""
     if f.revenue is None or f.revenue <= 0:
         return "Revenue is missing or not positive" + note

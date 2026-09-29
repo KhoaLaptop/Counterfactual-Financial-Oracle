@@ -62,9 +62,9 @@ def test_growth_start_is_capped():
 def test_wacc_uses_capm_and_after_tax_cost_of_debt():
     a, _ = build_assumptions(_fundamentals(), _market())
     # Blume beta = 0.67 * 1.2 + 0.33; Re = 4% + beta * 5%; E = 8 * 100 = 800, D = 200,
-    # Rd = 10/200 = 5%, tax = 20%
+    # Rd = 10/200 = 5% raised to the 4% + 1.5% credit-spread floor; tax = 20%
     cost_of_equity = 0.04 + (0.67 * 1.2 + 0.33) * 0.05
-    assert a.wacc == pytest.approx(0.8 * cost_of_equity + 0.2 * 0.05 * 0.8)
+    assert a.wacc == pytest.approx(0.8 * cost_of_equity + 0.2 * 0.055 * 0.8)
 
 
 def test_missing_optionals_fall_back_and_are_reported():
@@ -233,3 +233,28 @@ def test_high_leverage_lowers_confidence():
 
     assert level == "Medium"
     assert any("leverage" in r.lower() for r in reasons)
+
+
+@pytest.mark.parametrize("sic, assessable", [(4911, False), (4924, False), (4941, False),
+                                             (4922, True), (4953, True)])
+def test_regulated_utilities_are_not_assessable(sic, assessable):
+    # Electric (4911), gas distribution (4924), water (4941) are out; pipelines (4922)
+    # and waste (4953) are ordinary businesses.
+    verdict = evaluate(_fundamentals(sic=sic), _market(), num_simulations=200)
+    assert (verdict.label != "NOT_ASSESSABLE") == assessable
+    if not assessable:
+        assert "utility" in verdict.reason.lower()
+
+
+def test_cost_of_debt_has_a_credit_spread_and_wacc_a_floor():
+    rf = 0.0526
+    # Heavily indebted, cheap stated interest, low beta: previously WACC ~6%.
+    f = _fundamentals(total_debt=4000.0, interest_expense=10.0, cash=0.0)
+    a, _ = build_assumptions(f, _market(beta=0.3, risk_free_rate=rf, price=8.0))
+
+    assert a.wacc >= rf + 0.02 - 1e-12
+
+
+def test_margin_target_comes_from_history():
+    a, _ = build_assumptions(_fundamentals(operating_margin_5y=0.12), _market())
+    assert a.margin_target == pytest.approx(0.12)

@@ -330,3 +330,40 @@ def test_stale_balance_sheet_values_are_not_used():
     gaap["LongTermDebtNoncurrent"] = _concept(_e(None, "2025-06-30", 900))
 
     assert parse_company_facts(facts, ticker="CMCSA").total_debt == pytest.approx(900)
+
+
+def test_five_year_average_operating_margin():
+    facts = _facts()
+    gaap = facts["facts"]["us-gaap"]
+    gaap["OperatingIncomeLoss"] = _concept(
+        _e("2021-01-01", "2021-12-31", 70, form="10-K", filed="2022-02-01"),    # 10% of 700
+        _e("2022-01-01", "2022-12-31", 160, form="10-K", filed="2023-02-01"),   # 20% of 800
+        _e("2023-01-01", "2023-12-31", 270, form="10-K", filed="2024-02-01"),   # 30% of 900
+        _e("2024-01-01", "2024-12-31", 200, form="10-K", filed="2025-02-01"),   # 20% of 1000
+    )
+
+    f = parse_company_facts(facts, ticker="X")
+
+    assert f.operating_margin_5y == pytest.approx(0.20)  # median of 10%, 20%, 30%, 20%
+
+
+def test_five_year_margin_is_robust_to_extraordinary_years():
+    # Cruise-line style: two pandemic years of huge losses, then normal profitability.
+    facts = _facts()
+    gaap = facts["facts"]["us-gaap"]
+    gaap["OperatingIncomeLoss"] = _concept(
+        _e("2021-01-01", "2021-12-31", -700, form="10-K", filed="2022-02-01"),   # -100%
+        _e("2022-01-01", "2022-12-31", -400, form="10-K", filed="2023-02-01"),   # -50%
+        _e("2023-01-01", "2023-12-31", 135, form="10-K", filed="2024-02-01"),    # 15%
+        _e("2024-01-01", "2024-12-31", 180, form="10-K", filed="2025-02-01"),    # 18%
+    )
+    gaap["Revenues"]["units"]["USD"].append(_e("2020-01-01", "2020-12-31", 600, form="10-K", filed="2021-02-01"))
+    gaap["OperatingIncomeLoss"]["units"]["USD"].append(
+        _e("2020-01-01", "2020-12-31", 120, form="10-K", filed="2021-02-01"))              # 20%
+
+    assert parse_company_facts(facts, ticker="CCL").operating_margin_5y == pytest.approx(0.15)
+
+
+def test_five_year_margin_needs_three_years():
+    f = parse_company_facts(_facts(), ticker="X")  # only one fiscal year of operating income
+    assert f.operating_margin_5y is None

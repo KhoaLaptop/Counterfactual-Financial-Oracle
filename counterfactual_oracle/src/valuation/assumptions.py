@@ -19,6 +19,8 @@ RECENT_GROWTH_WEIGHT = 0.7
 GROWTH_JUMP = 0.15  # recent vs 3-year growth gap that signals acquisitions or one-offs
 WACC_BOUNDS = (0.05, 0.16)
 WACC_SIGMA = 0.01
+MIN_CREDIT_SPREAD = 0.015
+MIN_EQUITY_OVER_RISK_FREE = 0.02  # WACC floor: risk-free + 2pt
 TERMINAL_GROWTH = (0.015, 0.03)
 
 # Optional inputs whose absence is reported (and lowers confidence).
@@ -78,11 +80,13 @@ def _wacc(f: Fundamentals, m: MarketSnapshot, shares: float, tax_rate: float) ->
     cost_of_debt = _ratio(f.interest_expense, debt)
     if cost_of_debt is None:
         cost_of_debt = m.risk_free_rate + 0.02
-    cost_of_debt = float(np.clip(cost_of_debt, m.risk_free_rate, m.risk_free_rate + 0.06))
+    # Corporate debt costs at least a credit spread over government bonds.
+    cost_of_debt = float(np.clip(cost_of_debt, m.risk_free_rate + MIN_CREDIT_SPREAD, m.risk_free_rate + 0.06))
 
     weight_debt = debt / (equity + debt) if equity + debt > 0 else 0.0
     wacc = (1 - weight_debt) * cost_of_equity + weight_debt * cost_of_debt * (1 - tax_rate)
-    return float(np.clip(wacc, *WACC_BOUNDS))
+    floor = max(WACC_BOUNDS[0], m.risk_free_rate + MIN_EQUITY_OVER_RISK_FREE)
+    return float(np.clip(wacc, floor, max(WACC_BOUNDS[1], floor)))
 
 
 def build_assumptions(
@@ -118,6 +122,7 @@ def build_assumptions(
         wacc=_wacc(f, m, shares, tax_rate),
         wacc_sigma=WACC_SIGMA,
         capex_fade=True,
+        margin_target=f.operating_margin_5y,
         net_debt=(f.total_debt or 0.0) - (f.cash or 0.0),
         shares=shares,
     )

@@ -50,12 +50,15 @@ class Ranking(BaseModel):
     excluded: List[Excluded] = Field(default_factory=list)
 
 
+MIN_SPREAD = 0.05  # a zero-width distribution (e.g. fair value $0 everywhere) still ranks
+
+
 def risk_adjusted_gap(verdict) -> Optional[float]:
     """Median gap divided by the P10-P90 spread relative to price; None if not ranked."""
     if verdict.label == "NOT_ASSESSABLE" or verdict.fair_value is None:
         return None
     spread = (verdict.fair_value.p90 - verdict.fair_value.p10) / verdict.price
-    return verdict.gap_pct / spread if spread > 0 else None
+    return verdict.gap_pct / max(spread, MIN_SPREAD)
 
 
 def rank_universe(
